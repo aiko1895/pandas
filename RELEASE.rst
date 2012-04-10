@@ -31,11 +31,29 @@ pandas 0.7.3
 
   - Add group_keys argument to groupby to not add group names to MultiIndex in
     result of apply (GH #938)
-  - scatter_matrix method in pandas/tools/plotting.py (PR #935)
+  - DataFrame can now accept non-integer label slicing (GH #946). Previously
+    only DataFrame.ix was able to do so.
+  - DataFrame.apply now retains name attributes (GH #983)
+  - Numeric DataFrame comparisons with non-numeric values now raises proper
+    TypeError (GH #943). Previously raise "PandasError: DataFrame constructor
+    not properly called!"
   - Add ``kurt`` methods to Series and DataFrame (PR #964)
   - Can pass dict of column -> list/set NA values for text parsers (GH #754)
+  - Added fixed-width file reader (PR #952)
+  - Allows users specified NA values in text parsers (GH #754)
+  - Parsers checks for openpyxl dependency and raises ImportError if not found
+    (PR #1007)
+  - New factory function to create HDFStore objects that can be used in a with
+    statement so users do not have to explicitly call HDFStore.close (PR #1005)
   - pivot_table is now more flexible with same parameters as groupby (GH #941)
-
+  - Added stacked bar plots (GH #987)
+  - scatter_matrix method in pandas/tools/plotting.py (PR #935)
+  - DataFrame.boxplot returns plot results for ex-post styling (GH #985)
+  - Short version number accessible as pandas.version.short_version (GH #930)
+  - Additional documentation in panel.to_frame (GH #942)
+  - More informative Series.apply docstring regarding element-wise apply
+    (GH #977)
+  - Notes on rpy2 installation (GH #1006)
 
 **API Changes**
 
@@ -63,7 +81,8 @@ pandas 0.7.3
   - DataFrame.plot(kind='bar') ignores color argument (GH #958)
   - Inconsistent Index comparison results (GH #948)
   - Improper int dtype DataFrame construction from data with NaN (GH #846)
-
+  - Removes default 'result' name in grouby results (GH #995)
+  - DataFrame.from_records no longer mutate input columns (PR #975)
 
 pandas 0.7.2
 ============
