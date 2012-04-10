@@ -34,6 +34,8 @@ pandas 0.7.3
   - scatter_matrix method in pandas/tools/plotting.py (PR #935)
   - Add ``kurt`` methods to Series and DataFrame (PR #964)
   - Can pass dict of column -> list/set NA values for text parsers (GH #754)
+  - pivot_table is now more flexible with same parameters as groupby (GH #941)
+
 
 **API Changes**
 
@@ -45,6 +47,23 @@ pandas 0.7.3
   - Don't attach nonsense 'result' name to groupby results (GH #995)
   - Fix logic error when selecting part of a row in a DataFrame with a
     MultiIndex index (GH #1013)
+  - Series comparison with Series of differing length causes crash (GH #1016).
+  - DataFrame.ix[tup, list] raises Exception (GH #1013)
+  - DataFrame.plot(logy=True) has no effect (GH #1011).
+  - Broken arithmetic operations between SparsePanel-Panel (GH #1015)
+  - Unicode repr issues in MultiIndex with non-ascii characters (GH #1010)
+  - DataFrame.lookup() returns inconsistent results if exact match not present
+    (GH #1001)
+  - DataFrame arithmetic operations not treating None as NA (GH #992)
+  - DataFrameGroupBy.apply returns incorrect result (GH #991)
+  - Series.reshape returns incorrect result for multiple dimensions (GH #989)
+  - Series comparison with nan doesn't always return boolean type (GH #933 #953)
+  - Series.std and Series.var ignores ddof parameter (GH #934)
+  - DataFrame.append loses index names (GH #980)
+  - DataFrame.plot(kind='bar') ignores color argument (GH #958)
+  - Inconsistent Index comparison results (GH #948)
+  - Improper int dtype DataFrame construction from data with NaN (GH #846)
+
 
 pandas 0.7.2
 ============
