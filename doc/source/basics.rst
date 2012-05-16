@@ -17,15 +17,18 @@ Here we discuss a lot of the essential functionality common to the pandas data
 structures. Here's how to create some of the objects used in the examples from
 the previous section:
 
-.. ipython:: python
+.. ipython::
 
-   index = date_range('1/1/2000', periods=8)
-   s = Series(randn(5), index=['a', 'b', 'c', 'd', 'e'])
-   df = DataFrame(randn(8, 3), index=index,
-                  columns=['A', 'B', 'C'])
-   wp = Panel(randn(2, 5, 4), items=['Item1', 'Item2'],
-              major_axis=date_range('1/1/2000', periods=5),
-              minor_axis=['A', 'B', 'C', 'D'])
+   In [1]: index = date_range('1/1/2000', periods=8)
+
+   In [2]: s = Series(randn(5), index=['a', 'b', 'c', 'd', 'e'])
+
+   In [3]: df = DataFrame(randn(8, 3), index=index,
+      ...:                columns=['A', 'B', 'C'])
+
+   In [4]: wp = Panel(randn(2, 5, 4), items=['Item1', 'Item2'],
+      ...:            major_axis=date_range('1/1/2000', periods=5),
+      ...:            minor_axis=['A', 'B', 'C', 'D'])
 
 .. _basics.head_tail:
 
@@ -36,11 +39,24 @@ To view a small sample of a Series or DataFrame object, use the ``head`` and
 ``tail`` methods. The default number of elements to display is five, but you
 may pass a custom number.
 
-.. ipython:: python
+.. ipython::
 
-   long_series = Series(randn(1000))
-   long_series.head()
-   long_series.tail(3)
+    In [5]: long_series = Series(randn(1000))
+
+    In [6]: long_series.head()
+    Out[6]:
+    0   -0.663260
+    1   -2.169555
+    2    0.088584
+    3    2.220296
+    4   -0.149226
+
+    In [7]: long_series.tail(3)
+    Out[7]:
+    997   -1.818651
+    998   -1.341884
+    999   -0.033343
+
 
 .. _basics.attrs:
 
