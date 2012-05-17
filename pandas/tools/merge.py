@@ -24,11 +24,13 @@ import pandas.lib as lib
 @Substitution('\nleft : DataFrame')
 @Appender(_merge_doc, indents=0)
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
-          left_index=False, right_index=False, sort=True,
-          suffixes=('_x', '_y'), copy=True):
+          left_index=False, left_level=None,
+          right_index=False, right_level=None,
+          sort=True, suffixes=('_x', '_y'), copy=True):
     op = _MergeOperation(left, right, how=how, on=on, left_on=left_on,
                          right_on=right_on, left_index=left_index,
-                         right_index=right_index, sort=sort, suffixes=suffixes,
+                         left_level=left_level, right_index=right_index,
+                         right_level=right_level, sort=sort, suffixes=suffixes,
                          copy=copy)
     return op.get_result()
 if __debug__: merge.__doc__ = _merge_doc % '\nleft : DataFrame'
@@ -154,7 +156,8 @@ class _MergeOperation(object):
 
     def __init__(self, left, right, how='inner', on=None,
                  left_on=None, right_on=None, axis=1,
-                 left_index=False, right_index=False, sort=True,
+                 left_index=False, left_level=None, right_index=False,
+                 right_level=None, sort=True,
                  suffixes=('_x', '_y'), copy=True):
         self.left = self.orig_left = left
         self.right = self.orig_right = right
@@ -169,8 +172,14 @@ class _MergeOperation(object):
         self.suffixes = suffixes
         self.sort = sort
 
+        if left_level is not None:
+            left_index = True
+        if right_level is not None:
+            right_index = True
         self.left_index = left_index
         self.right_index = right_index
+        self.left_level = left_level
+        self.right_level = right_level
 
         # note this function has side effects
         (self.left_join_keys,
@@ -290,68 +299,93 @@ class _MergeOperation(object):
         """
         self._validate_specification()
 
-        left_keys = []
-        right_keys = []
-        join_names = []
-        right_drop = []
-        left, right = self.left, self.right
+        left_keys, right_keys, rdrop, join_names = [], [], [], []
 
+        if _any(self.left_on) and _any(self.right_on):
+            left_keys, right_keys, join_names, rdrop = self._get_both_keys()
+
+        elif _any(self.left_on):
+            left_keys, join_names = self._get_left_keys()
+            right_keys = self._key_from_index(self.right, self.right_level)
+
+        elif _any(self.right_on):
+            right_keys, join_names = self._get_right_keys()
+            left_keys = self._key_from_index(self.left, self.left_level)
+
+        if rdrop:
+            self.right = self.right.drop(rdrop, axis=1)
+
+        return left_keys, right_keys, join_names
+
+    def _get_right_keys(self):
+        keys, join_names = [], []
+        right = self.right
+        is_rkey = lambda x: isinstance(x, np.ndarray) and len(x) == len(right)
+        for k in self.right_on:
+            self._handle_key(keys, join_names, k, is_rkey, right)
+        return keys, join_names
+
+    def _get_left_keys(self):
+        keys, join_names = [], []
+        left = self.left
+        is_lkey = lambda x: isinstance(x, np.ndarray) and len(x) == len(left)
+        for k in self.left_on:
+            self._handle_key(keys, join_names, k, is_lkey, left)
+        return keys, join_names
+
+    def _get_both_keys(self):
+        left_keys, right_keys, join_names = [], [], []
+        right_drop = []
+
+        left, right = self.left, self.right
         is_lkey = lambda x: isinstance(x, np.ndarray) and len(x) == len(left)
         is_rkey = lambda x: isinstance(x, np.ndarray) and len(x) == len(right)
 
-        # ugh, spaghetti re #733
-        if _any(self.left_on) and _any(self.right_on):
-            for lk, rk in zip(self.left_on, self.right_on):
-                if is_lkey(lk):
-                    left_keys.append(lk)
-                    if is_rkey(rk):
-                        right_keys.append(rk)
-                        join_names.append(None)  # what to do?
-                    else:
-                        right_keys.append(right[rk].values)
-                        join_names.append(rk)
-                else:
-                    if not is_rkey(rk):
-                        right_keys.append(right[rk].values)
-                        if lk == rk:
-                            right_drop.append(rk)
-                    else:
-                        right_keys.append(rk)
-                    left_keys.append(left[lk].values)
-                    join_names.append(lk)
-        elif _any(self.left_on):
-            for k in self.left_on:
-                if is_lkey(k):
-                    left_keys.append(k)
-                    join_names.append(None)
-                else:
-                    left_keys.append(left[k].values)
-                    join_names.append(k)
-            if isinstance(self.right.index, MultiIndex):
-                right_keys = [lev.values.take(lab)
-                              for lev, lab in zip(self.right.index.levels,
-                                                  self.right.index.labels)]
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(lk)
+                self._handle_key(right_keys, join_names, rk, is_rkey, right)
             else:
-                right_keys = [self.right.index.values]
-        elif _any(self.right_on):
-            for k in self.right_on:
-                if is_rkey(k):
-                    right_keys.append(k)
-                    join_names.append(None)
+                if not is_rkey(rk):
+                    self._handle_key(right_keys, [], rk, is_rkey, right)
+                    if lk == rk and rk in right:
+                        right_drop.append(rk)
                 else:
-                    right_keys.append(right[k].values)
-                    join_names.append(k)
-            if isinstance(self.left.index, MultiIndex):
-                left_keys = [lev.values.take(lab)
-                             for lev, lab in zip(self.left.index.levels,
-                                                 self.left.index.labels)]
+                    right_keys.append(rk)
+
+                self._handle_key(left_keys, join_names, lk, is_lkey, left)
+
+        return left_keys, right_keys, join_names, right_drop
+
+    def _handle_key(self, keys, join_names, k, check_func, data):
+        # mutates keys and join_names
+        if check_func(k):
+            keys.append(k)
+            join_names.append(None)
+        else:
+            if k in data:
+                keys.append(data[k].values)
+                join_names.append(k)
+            elif k == data.index.name:
+                keys.append(data.index.view(type=np.ndarray))
+                join_names.append(None)
+            elif (isinstance(data.index, MultiIndex) and
+                  k in getattr(data.index, 'names', [])):
+                keys.append(data.index.get_level_values(k))
+                join_names.append(None)
             else:
-                left_keys = [self.left.index.values]
+                raise ValueError('Unrecognized key %s' % str(k))
 
-        if right_drop:
-            self.right = self.right.drop(right_drop, axis=1)
-
-        return left_keys, right_keys, join_names
+    def _key_from_index(self, data, index_level):
+        if isinstance(data.index, MultiIndex):
+            if index_level is None:
+                keys = [lev.values.take(lab) for lev, lab in
+                        zip(data.index.levels, data.index.labels)]
+            else:
+                keys = data.index.get_level_values(index_level)
+        else:
+            keys = [data.index.values]
+        return keys
 
     def _validate_specification(self):
         # Hm, any way to make this logic less complicated??

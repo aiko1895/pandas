@@ -519,6 +519,57 @@ class TestMerge(unittest.TestCase):
         assert_almost_equal(merged['value_x'], [2, 3, 1, 1, 4, 4, np.nan])
         assert_almost_equal(merged['value_y'], [6, np.nan, 5, 8, 5, 8, 7])
 
+    def test_merge_multilevel(self):
+        data = """
+37       Delta   East         hard
+59     Epsilon   East         hard
+96        Zeta   East         hard
+21       Gamma   West  medium hard
+2        Alpha   West         soft
+10        Beta   West         soft
+"""
+        from pandas import read_fwf
+        from pandas.util.py3compat import StringIO
+        colspec = [(0, 3), (4, 15), (16, 21), (22, 34)]
+        A = read_fwf(StringIO(data), colspec, index_col=0)
+        A.columns = Index(['a3', 'a1', 'a2'])
+
+        data = """
+37    20579     Alan  45.20
+59    20693    Betty   4.40
+59    20706  Charlie   9.95
+37    20742   Dougal  16.60
+96    20861     Emma   7.40
+37    21167   Freddy  20.60
+59    20947   Gareth  21.00
+96    20536    Helen   9.65
+37    21002     Ivan  43.80
+21    21491    Jenny   6.90
+21   20655    Keith  42.40
+2    21083  Leonard  23.60
+2    21391    Mandy  30.40
+2    21381   Nicola  11.60
+10    21416   Oswald  30.30
+2     21392    Peter  44.40
+2    21386  Quentin   5.40
+"""
+        colspec = [(0, 3), (5, 11), (12, 20), (21, 27)]
+        B = read_fwf(StringIO(data), colspec, index_col=[0, 1])
+        B.columns = Index(['name', 'attr'])
+        B.index.names = ['Bidx1', 'Bidx2']
+
+        result = merge(A, B, left_index=True, right_on=['Bidx1'])
+
+        result = merge(B, A, left_on=['Bidx1'], right_index=True)
+
+        result = merge(A, B, left_index=True, right_level='Bidx1')
+
+        result = merge(B, A, right_index=True, left_level='Bidx1')
+
+        result = merge(B, B, left_on=['Bidx1'], right_on=['Bidx1'])
+
+        result = merge(B, B, left_level='Bidx1', right_level='Bidx1')
+
     def test_merge_nocopy(self):
         left = DataFrame({'a' : 0, 'b' : 1}, index=range(10))
         right = DataFrame({'c' : 'foo', 'd' : 'bar'}, index=range(10))
