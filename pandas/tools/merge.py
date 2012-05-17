@@ -27,11 +27,14 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, left_level=None,
           right_index=False, right_level=None,
           sort=True, suffixes=('_x', '_y'), copy=True):
+
     op = _MergeOperation(left, right, how=how, on=on, left_on=left_on,
                          right_on=right_on, left_index=left_index,
                          left_level=left_level, right_index=right_index,
                          right_level=right_level, sort=sort, suffixes=suffixes,
                          copy=copy)
+
+
     return op.get_result()
 if __debug__: merge.__doc__ = _merge_doc % '\nleft : DataFrame'
 
@@ -247,8 +250,15 @@ class _MergeOperation(object):
         left_ax = self.left._data.axes[self.axis]
         right_ax = self.right._data.axes[self.axis]
         if self.left_index and self.right_index:
-            join_index, left_indexer, right_indexer = \
-                left_ax.join(right_ax, how=self.how, return_indexers=True)
+            if self.right_level is None:
+                join_index, left_indexer, right_indexer = \
+                    left_ax.join(right_ax, how=self.how, level=self.left_level,
+                                 return_indexers=True)
+            else:
+                join_index, left_indexer, right_indexer = \
+                    left_ax.join(right_ax, how=self.how, level=self.right_level,
+                                 return_indexers=True)
+
         elif self.right_index and self.how == 'left':
             join_index, left_indexer, right_indexer = \
                 _left_join_on_index(left_ax, right_ax, self.left_join_keys,
@@ -368,11 +378,9 @@ class _MergeOperation(object):
                 join_names.append(k)
             elif k == data.index.name:
                 keys.append(data.index.view(type=np.ndarray))
-                join_names.append(None)
             elif (isinstance(data.index, MultiIndex) and
                   k in getattr(data.index, 'names', [])):
                 keys.append(data.index.get_level_values(k))
-                join_names.append(None)
             else:
                 raise ValueError('Unrecognized key %s' % str(k))
 
@@ -414,14 +422,26 @@ class _MergeOperation(object):
         elif self.left_on is not None:
             n = len(self.left_on)
             if self.right_index:
-                assert(len(self.left_on) == self.right.index.nlevels)
+                right_len = self.right.index.nlevels
+                left_len = len(self.left_on)
+                if right_len != left_len:
+                    raise ValueError(('Right index must have %d levels to match'
+                        ' left_on but only has %d ' % (left_len, right_len)))
                 self.right_on = [None] * n
         elif self.right_on is not None:
             n = len(self.right_on)
             if self.left_index:
-                assert(len(self.right_on) == self.left.index.nlevels)
+                right_len = len(self.right_on)
+                left_len = self.left.index.nlevels
+                if right_len != left_len:
+                    raise ValueError(('Left index must have %d levels to match '
+                        'right_on but only has %d ' % (right_len, left_len)))
                 self.left_on = [None] * n
-        assert(len(self.right_on) == len(self.left_on))
+
+        right_len = len(self.right_on)
+        left_len = len(self.left_on)
+        if right_len != left_len:
+            raise ValueError('left_on and right_on lengths must match')
 
 
 def _get_join_indexers(left_keys, right_keys, sort=False, how='inner'):
@@ -442,6 +462,13 @@ def _get_join_indexers(left_keys, right_keys, sort=False, how='inner'):
 
     for lk, rk in zip(left_keys, right_keys):
         llab, rlab, count = _factorize_keys(lk, rk, sort=sort)
+        if len(left_keys) == 0:
+            empty = np.array([], dtype=np.int64)
+            return empty, empty, 0
+
+        left_labels = []
+        right_labels = []
+        group_sizes = []
 
         left_labels.append(llab)
         right_labels.append(rlab)

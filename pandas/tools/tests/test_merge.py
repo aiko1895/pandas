@@ -533,6 +533,7 @@ class TestMerge(unittest.TestCase):
         colspec = [(0, 3), (4, 15), (16, 21), (22, 34)]
         A = read_fwf(StringIO(data), colspec, index_col=0)
         A.columns = Index(['a3', 'a1', 'a2'])
+        A.index.name = 'Aidx'
 
         data = """
 37    20579     Alan  45.20
@@ -560,15 +561,70 @@ class TestMerge(unittest.TestCase):
 
         result = merge(A, B, left_index=True, right_on=['Bidx1'])
 
+        self.assert_(len(result) == len(B))
+
+        A_cols = ['a1', 'a2', 'a3']
+        for aix in A.index:
+            mask = result.index.get_level_values(0) == aix
+            assert_frame_equal(result.ix[mask, ['name', 'attr']],
+                               B[B.index.get_level_values('Bidx1') == aix])
+            rs = result.ix[mask, A_cols]
+            exp_vals = A.xs(aix)
+            expected = DataFrame(dict(zip(A_cols, exp_vals.reindex(A_cols))),
+                                 index=result.ix[mask].index)
+            assert_frame_equal(expected, rs)
+
         result = merge(B, A, left_on=['Bidx1'], right_index=True)
+
+        self.assert_(len(result) == len(B))
+
+        A_cols = ['a1', 'a2', 'a3']
+        for aix in A.index:
+            mask = result.index.get_level_values(0) == aix
+            assert_frame_equal(result.ix[mask, ['name', 'attr']],
+                               B[B.index.get_level_values('Bidx1') == aix])
+            rs = result.ix[mask, A_cols]
+            exp_vals = A.xs(aix)
+            expected = DataFrame(dict(zip(A_cols, exp_vals.reindex(A_cols))),
+                                 index=result.ix[mask].index)
+            assert_frame_equal(expected, rs)
 
         result = merge(A, B, left_index=True, right_level='Bidx1')
 
+        self.assert_(len(result) == len(B))
+
+        A_cols = ['a1', 'a2', 'a3']
+        for aix in A.index:
+            mask = result.index.get_level_values(0) == aix
+            assert_frame_equal(result.ix[mask, ['name', 'attr']],
+                               B[B.index.get_level_values('Bidx1') == aix])
+            rs = result.ix[mask, A_cols]
+            exp_vals = A.xs(aix)
+            expected = DataFrame(dict(zip(A_cols, exp_vals.reindex(A_cols))),
+                                 index=result.ix[mask].index)
+            assert_frame_equal(expected, rs)
+
         result = merge(B, A, right_index=True, left_level='Bidx1')
 
-        result = merge(B, B, left_on=['Bidx1'], right_on=['Bidx1'])
+        self.assert_(len(result) == len(B))
 
-        result = merge(B, B, left_level='Bidx1', right_level='Bidx1')
+        A_cols = ['a1', 'a2', 'a3']
+        for aix in A.index:
+            mask = result.index.get_level_values(0) == aix
+            assert_frame_equal(result.ix[mask, ['name', 'attr']],
+                               B[B.index.get_level_values('Bidx1') == aix])
+            rs = result.ix[mask, A_cols]
+            exp_vals = A.xs(aix)
+            expected = DataFrame(dict(zip(A_cols, exp_vals.reindex(A_cols))),
+                                 index=result.ix[mask].index)
+            assert_frame_equal(expected, rs)
+
+        self.assertRaises(ValueError, merge, A, B, left_index=True,
+                          right_on=['Bidx1', 'Bidx2'])
+        self.assertRaises(ValueError, merge, B, A, right_index=True,
+                          left_on=['Bidx1', 'Bidx2'])
+        self.assert_(merge(A, B).empty)
+        self.assert_(merge(B, A).empty)
 
     def test_merge_nocopy(self):
         left = DataFrame({'a' : 0, 'b' : 1}, index=range(10))
