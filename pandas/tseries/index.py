@@ -226,8 +226,15 @@ class DatetimeIndex(Int64Index):
             if lib.is_string_array(data):
                 data = _str_to_dt_array(data, offset)
             else:
-                data = tools.to_datetime(data)
-                data = np.asarray(data, dtype='M8[ns]')
+                try:
+                    data = tools.to_datetime(data)
+                    data = np.asarray(data, dtype='M8[ns]')
+                except TypeError:
+                    inferred_type = lib.infer_dtype(data)
+                    if inferred_type == 'integer':
+                        data = np.asarray(data, dtype='M8[ns]')
+                    else:
+                        raise
 
         if issubclass(data.dtype.type, basestring):
             subarr = _str_to_dt_array(data, offset)

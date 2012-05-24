@@ -1143,6 +1143,8 @@ class PandasJSONTests(TestCase):
 
         encoded = ujson.encode(rng)
         decoded = DatetimeIndex(np.array(ujson.decode(encoded)))
+        rs = DatetimeIndex(ujson.decode(encoded))
+        assert_array_equal(decoded, rs)
 
         self.assert_(rng.equals(decoded))
 
