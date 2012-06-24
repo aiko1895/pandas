@@ -367,10 +367,12 @@ algos_ext = Extension('pandas._algos',
                       )
 
 lib_ext = Extension('pandas.lib',
-                    depends=tseries_depends + ['pandas/src/numpy_helper.h'],
+                    depends=tseries_depends + ['pandas/src/numpy_helper.h',
+                                               'pandas/src/scipy.h'],
                     sources=[srcpath('tseries', suffix=suffix),
                              'pandas/src/datetime/np_datetime.c',
-                             'pandas/src/datetime/np_datetime_strings.c'],
+                             'pandas/src/datetime/np_datetime_strings.c',
+                             'pandas/src/scipy.c'],
                     include_dirs=[np.get_include()],
                     # pyrex_gdb=True,
                     # extra_compile_args=['-Wconversion']
