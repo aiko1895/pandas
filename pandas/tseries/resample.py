@@ -26,7 +26,7 @@ class TimeGrouper(CustomGrouper):
     closed : closed end of interval; left (default) or right
     label : interval boundary to use for labeling; left (default) or right
     nperiods : optional, integer
-    convention : {'start', 'end', 'e', 's'}
+    convention : {'start', 'end', 'e', 's', 'both'}
         If axis is PeriodIndex
 
     Notes
@@ -216,12 +216,20 @@ class TimeGrouper(CustomGrouper):
             new_index = PeriodIndex(data=[], freq=self.freq)
             return obj.reindex(new_index)
         else:
-            start = axlabels[0].asfreq(self.freq, how=self.convention)
-            end = axlabels[-1].asfreq(self.freq, how=self.convention)
+            start_conv = end_conv = self.convention
+            if start_conv not in ('s', 'start', 'e', 'end'):
+                start_conv = 's'
+            if end_conv not in ('s', 'start', 'e', 'end'):
+                end_conv = 'e'
+            start = axlabels[0].asfreq(self.freq, how=start_conv)
+            end = axlabels[-1].asfreq(self.freq, how=end_conv)
             new_index = period_range(start, end, freq=self.freq)
 
         # Start vs. end of period
-        memb = axlabels.asfreq(self.freq, how=self.convention)
+        conv = self.convention
+        if conv not in ('s', 'start', 'e', 'end'):
+            conv = 's'
+        memb = axlabels.asfreq(self.freq, how=conv)
 
         if is_subperiod(axlabels.freq, self.freq) or self.how is not None:
             # Downsampling

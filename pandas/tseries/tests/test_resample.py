@@ -286,6 +286,25 @@ class TestResample(unittest.TestCase):
         expected.index = period_range('1990-01', '2000-01', freq='M')
         assert_series_equal(result, expected)
 
+    def test_resample_period_both(self):
+        prng = period_range('1/1/1999', freq='M', periods=3)
+        s = Series(np.random.randn(len(prng)), prng)
+        rs = s.resample('D', convention='both').index
+        xp = period_range('1/1/1999', '3/31/1999', freq='D')
+        rs.equals(xp)
+
+        prng = period_range('1/1/1999', freq='Q', periods=3)
+        s = Series(np.random.randn(len(prng)), prng)
+        rs = s.resample('M', convention='both').index
+        xp = period_range('1/1/1999', '9/30/1999', freq='M')
+        rs.equals(xp)
+
+        prng = period_range('1/1/1999', freq='A', periods=3)
+        s = Series(np.random.randn(len(prng)), prng)
+        rs = s.resample('A', convention='both').index
+        xp = period_range('1/1/1999', '12/31/2001', freq='M')
+        rs.equals(xp)
+
     def test_ohlc_5min(self):
         def _ohlc(group):
             if isnull(group).all():
