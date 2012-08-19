@@ -53,12 +53,12 @@ class TestSQLite(unittest.TestCase):
 
     def test_schema(self):
         frame = tm.makeTimeDataFrame()
-        create_sql = sql.get_sqlite_schema(frame, 'test', {'A': 'DATETIME'})
+        create_sql = sql.get_sqlite_schema(frame, 'test', {'A': 'FLOAT'})
         lines = create_sql.splitlines()
         for l in lines:
             tokens = l.split(' ')
             if len(tokens) == 2 and tokens[0] == 'A':
-                self.assert_(tokens[1] == 'DATETIME')
+                self.assert_(tokens[1] == 'FLOAT')
 
     def test_execute_fail(self):
         create_sql = """

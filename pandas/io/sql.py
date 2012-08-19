@@ -9,6 +9,7 @@ import traceback
 
 from pandas.core.datetools import format as date_format
 from pandas.core.api import DataFrame, isnull
+import pandas.lib as lib
 
 #-------------------------------------------------------------------------------
 # Helper execution function
@@ -119,7 +120,8 @@ def uquery(sql, con=None, cur=None, retry=True, params=()):
             return uquery(sql, con, retry=False)
     return result
 
-def read_frame(sql, con, index_col=None, coerce_float=True):
+def read_frame(sql, con, index_col=None, coerce_float=True, parse_dates=None,
+               dayfirst=False):
     """
     Returns a DataFrame corresponding to the result set of the query
     string.
@@ -134,6 +136,13 @@ def read_frame(sql, con, index_col=None, coerce_float=True):
     con: DB connection object, optional
     index_col: string, optional
         column name to use for the returned DataFrame object.
+    coerce_float: boolean, default True
+        Attempt to convert values to non-string, non-numeric objects (like
+        decimal.Decimal) to floating point, useful for SQL result sets
+    parse_dates: list, default None
+        Can be used for sqlite to return datetime
+    dayfirst: boolean, default False
+        Whether to use European date format
     """
     cur = execute(sql, con)
     rows = _safe_fetch(cur)
@@ -144,6 +153,13 @@ def read_frame(sql, con, index_col=None, coerce_float=True):
 
     result = DataFrame.from_records(rows, columns=columns,
                                     coerce_float=coerce_float)
+
+    if len(result) > 0 and parse_dates is not None:
+        if not isinstance(parse_dates, (list, tuple, np.ndarray)):
+            parse_dates = [parse_dates]
+        for c in parse_dates:
+            result.ix[:, c] = lib.try_parse_dates(result.ix[:, c].values,
+                                                  dayfirst=dayfirst)
 
     if index_col is not None:
         result = result.set_index(index_col)
@@ -158,25 +174,27 @@ def write_frame(frame, name=None, con=None, flavor='sqlite'):
     dropped
     """
     if flavor == 'sqlite':
-        schema = get_sqlite_schema(frame, name)
+        sqlstr = "SELECT * FROM " + name
+        try:
+            con.execute(sqlstr)
+        except Exception, inst:
+            schema = get_sqlite_schema(frame, name)
+            con.execute(schema)
     else:
         raise NotImplementedError
-
-    con.execute(schema)
 
     wildcards = ','.join(['?'] * len(frame.columns))
     insert_sql = 'INSERT INTO %s VALUES (%s)' % (name, wildcards)
     data = [tuple(x) for x in frame.values]
     con.executemany(insert_sql, data)
 
-def get_sqlite_schema(frame, name, dtypes=None):
+def get_sqlite_schema(frame, name, dtypes=None, keys=None):
     template = """
 CREATE TABLE %(name)s (
-  %(columns)s
+  %(columns)s%(extras)s
 );"""
 
     column_types = []
-
     frame_types = frame.dtypes
     for k in frame_types.index:
         dt = frame_types[k]
@@ -195,7 +213,11 @@ CREATE TABLE %(name)s (
 
     columns = ',\n  '.join('%s %s' % x for x in column_types)
 
-    return template % {'name' : name, 'columns' : columns}
+    extras = ''
+    if keys is not None:
+        extras = ',\n PRIMARY KEY %s\n' % str(tuple(keys))
+
+    return template % {'name' : name, 'columns' : columns, 'extras' : extras}
 
 
 
