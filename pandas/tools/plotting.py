@@ -196,7 +196,7 @@ def radviz(frame, class_column, ax=None, **kwds):
                             for i in range(n)]])
 
     for i in range(len(frame)):
-        row = df.irow(i).values
+        row = df.irow[i].values
         row_ = np.repeat(np.expand_dims(row, axis=1), 2, axis=1)
         y = (s * row_).sum(axis=0) / row.sum()
         class_name = frame[class_column].iget(i)
@@ -374,7 +374,7 @@ def parallel_coordinates(data, class_column, cols=None, ax=None, **kwds):
         ax = plt.gca()
 
     for i in range(n):
-        row = df.irow(i).values
+        row = df.irow[i].values
         y = row
         label = None
         kls = class_col.iget_value(i)

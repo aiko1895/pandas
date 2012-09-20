@@ -27,6 +27,7 @@ class _NDFrameIndexer(object):
     def __init__(self, obj):
         self.obj = obj
         self.ndim = obj.ndim
+        self.is_positional = False
 
     def __iter__(self):
         raise NotImplementedError('ix is not iterable')
@@ -34,7 +35,10 @@ class _NDFrameIndexer(object):
     def __getitem__(self, key):
         if type(key) is tuple:
             try:
-                return self.obj.get_value(*key)
+                if self.is_positional:
+                    return self.obj.iget_value(*key)
+                else:
+                    return self.obj.get_value(*key)
             except Exception:
                 pass
 
@@ -63,7 +67,7 @@ class _NDFrameIndexer(object):
     def __setitem__(self, key, value):
         # kludgetastic
         ax = self.obj._get_axis(0)
-        if isinstance(ax, MultiIndex):
+        if not self.is_positional and isinstance(ax, MultiIndex):
             try:
                 indexer = ax.get_loc(key)
                 self._setitem_with_indexer(indexer, value)
@@ -218,7 +222,10 @@ class _NDFrameIndexer(object):
             if _is_null_slice(key):
                 continue
 
-            retval = retval.ix._getitem_axis(key, axis=i)
+            if not self.is_positional:
+                retval = retval.ix._getitem_axis(key, axis=i)
+            else:
+                retval = retval.iix._getitem_axis(key, axis=i)
 
         return retval
 
@@ -233,9 +240,10 @@ class _NDFrameIndexer(object):
             return False
 
         # just too complicated
-        for ax in self.obj._data.axes:
-            if isinstance(ax, MultiIndex):
-                return False
+        if not self.is_positional:
+            for ax in self.obj._data.axes:
+                if isinstance(ax, MultiIndex):
+                    return False
 
         return True
 
@@ -587,6 +595,17 @@ class _NDFrameIndexer(object):
 # 32-bit floating point machine epsilon
 _eps = np.finfo('f4').eps
 
+def _is_positional_slice(obj):
+    def _is_valid_index(x):
+        return (com.is_integer(x) or com.is_float(x)
+                and np.allclose(x, int(x), rtol=_eps, atol=0))
+
+    def _crit(v):
+        return v is None or _is_valid_index(v)
+
+    return _crit(obj.start) and _crit(obj.stop)
+
+
 def _is_index_slice(obj):
     def _is_valid_index(x):
         return (com.is_integer(x) or com.is_float(x)
@@ -620,6 +639,130 @@ def _is_float_slice(obj):
     both_none = obj.start is None and obj.stop is None
 
     return not both_none and (_crit(obj.start) and _crit(obj.stop))
+
+
+class _NDFrameIntIndexer(_NDFrameIndexer):
+    """purely positional indexing"""
+
+    def __init__(self, obj, axis=None):
+        super(_NDFrameIntIndexer, self).__init__(obj)
+        self.axis = axis
+        self.is_positional = True
+
+    def __call__(self, key):
+        return self.__getitem__(key)
+
+    def __getitem__(self, key):
+        if self.axis is not None:
+            return self._getitem_axis(key, axis=self.axis)
+
+        return super(_NDFrameIntIndexer, self).__getitem__(key)
+
+    def _multi_take(self, tup):
+        from pandas.core.frame import DataFrame
+        from pandas.core.panel import Panel
+
+        if isinstance(self.obj, DataFrame):
+            new_index = self.obj.index[tup[0]]
+            new_columns = self.obj.columns[tup[1]]
+            return self.obj._reindex_with_indexers(new_index, tup[0],
+                new_columns, tup[1], True, np.nan)
+        elif isinstance(self.obj, Panel):
+            new_items = self.obj.items[tup[0]]
+            new_major = self.obj.major_axis[tup[1]]
+            new_minor = self.obj.minor_axis[tup[2]]
+
+            return self.obj._reindex_with_indexers(tup[0], new_items, tup[1],
+                new_major, tup[2], new_minor)
+
+    def _getitem_lowerdim(self, tup):
+        from pandas.core.frame import DataFrame
+
+        for i, key in enumerate(tup):
+            if _is_label_like(key) or isinstance(key, tuple):
+                section = self._getitem_axis(key, axis=i)
+
+                new_key = tup[:i] + tup[i + 1:]
+
+                if (isinstance(section, DataFrame) and i > 0
+                    and len(new_key) == 2):
+                    a, b = new_key
+                    new_key = b, a
+
+                if len(new_key) == 1:
+                    new_key, = new_key
+
+                return section.iix[new_key]
+
+        raise IndexingError('not applicable')
+
+    def _getitem_axis(self, key, axis=0):
+        # single int, list-like of int, or slice
+        if isinstance(key, slice):
+            if not _need_slice(key):
+                return self.obj
+            return self._slice(key, axis=axis)
+
+        elif _is_list_like(key):
+            keyarr = key
+            if not isinstance(key, Index):
+                keyarr = _asarray_tuplesafe(key)
+
+            return self.obj.take(keyarr, axis=axis)
+
+        else:
+            return self._get_loc(key, axis=axis)
+
+    def _convert_to_indexer(self, obj, axis=0):
+        return obj
+
+    def _get_loc(self, key, axis=0):
+        from pandas.core.frame import DataFrame, Series
+
+        axis = self.obj._get_axis_number(axis)
+        if isinstance(self.obj, DataFrame):
+            if axis == 1:
+                values = self.obj._data.iget(key)
+            elif axis == 0:
+                try:
+                    values = self.obj._data.fast_2d_xs(key, copy=False)
+                except:
+                    values = self.obj._data.fast_2d_xs(key, copy=True)
+
+            return Series(values, index=self.obj._get_axis(1-axis),
+                          name=self.obj.axes[axis][key])
+
+        self.obj._consolidate_inplace()
+        axis_number = self.obj._get_axis_number(axis)
+        new_data = self.obj._data.xs(key, axis=axis_number)
+        return DataFrame(new_data)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            if len(key) > self.ndim:
+                raise IndexingError('only tuples of length <= %d supported',
+                                    self.ndim)
+            indexer = self._convert_tuple(key)
+        elif self.axis is not None and self.axis > 0:
+            indexer = [slice(None, None)] * self.ndim
+            indexer[self.axis] = self._convert_to_indexer(key)
+            indexer = tuple(indexer)
+        else:
+            indexer = self._convert_to_indexer(key)
+
+        self._setitem_with_indexer(indexer, value)
+
+
+class _SeriesIntIndexer(_NDFrameIntIndexer):
+
+    def _get_loc(self, key, axis=0):
+        return self.obj.values[key]
+
+    def _slice(self, indexer, axis=0):
+        return self.obj._get_values(indexer)
+
+    def _setitem_with_indexer(self, indexer, value):
+        self.obj._set_values(indexer, value)
 
 
 class _SeriesIndexer(_NDFrameIndexer):

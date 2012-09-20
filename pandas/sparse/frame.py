@@ -392,7 +392,7 @@ class SparseDataFrame(DataFrame):
         if len(columns) == 0:
             return np.zeros((len(self.index), 0), dtype=float)
 
-        return np.array([self.icol(i).values
+        return np.array([self.icol[i].values
                          for i in range(len(self.columns))]).T
 
     values = property(as_matrix)

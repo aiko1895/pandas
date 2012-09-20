@@ -1199,18 +1199,21 @@ class CheckIndexing(object):
     def test_irow(self):
         df = DataFrame(np.random.randn(10, 4), index=range(0, 20, 2))
 
-        result = df.irow(1)
+        result = df.irow[1]
         exp = df.ix[2]
         assert_series_equal(result, exp)
+        assert_series_equal(result, df.irow(1))
 
-        result = df.irow(2)
+        result = df.irow[2]
         exp = df.ix[4]
         assert_series_equal(result, exp)
+        assert_series_equal(result, df.irow(2))
 
         # slice
-        result = df.irow(slice(4, 8))
+        result = df.irow[4:8]
         expected = df.ix[8:14]
         assert_frame_equal(result, expected)
+        assert_frame_equal(result, df.irow(slice(4, 8)))
 
         # verify slice is view
         result[2] = 0.
@@ -1219,11 +1222,38 @@ class CheckIndexing(object):
         assert_series_equal(df[2], exp_col)
 
         # list of integers
-        result = df.irow([1, 2, 4, 6])
+        result = df.irow[[1, 2, 4, 6]]
         expected = df.reindex(df.index[[1, 2, 4, 6]])
         assert_frame_equal(result, expected)
+        assert_frame_equal(result, df.irow([1, 2, 4, 6]))
 
     def test_icol(self):
+        df = DataFrame(np.random.randn(4, 10), columns=range(0, 20, 2))
+
+        result = df.icol[1]
+        exp = df.ix[:, 2]
+        assert_series_equal(result, exp)
+
+        result = df.icol[2]
+        exp = df.ix[:, 4]
+        assert_series_equal(result, exp)
+
+        # slice
+        result = df.icol[slice(4, 8)]
+        expected = df.ix[:, 8:14]
+        assert_frame_equal(result, expected)
+
+        # verify slice is view
+        result[8] = 0.
+        self.assert_((df[8] == 0).all())
+
+        # list of integers
+        result = df.icol[[1, 2, 4, 6]]
+        expected = df.reindex(columns=df.columns[[1, 2, 4, 6]])
+        assert_frame_equal(result, expected)
+
+    def test_icol_call(self):
+        #backward compat
         df = DataFrame(np.random.randn(4, 10), columns=range(0, 20, 2))
 
         result = df.icol(1)
@@ -1248,21 +1278,61 @@ class CheckIndexing(object):
         expected = df.reindex(columns=df.columns[[1, 2, 4, 6]])
         assert_frame_equal(result, expected)
 
+    def test_icol_set(self):
+        df = DataFrame(np.random.randn(4, 10), columns=range(0, 20, 2))
+
+        exp = df.icol(2) * 2
+        df.icol[2] = exp.copy()
+        result = df.icol[2]
+        assert_series_equal(result, exp)
+
+        # slice
+        xp = df.icol[4:8] * 2
+        df.icol[4:8] = xp
+        rs = df.icol(slice(4, 8))
+        assert_frame_equal(rs, xp)
+
+        # list of integers
+        xp = df.icol[[1, 2, 4, 6]] * 2
+        df.icol[[1, 2, 4, 6]] = xp
+        rs = df.icol([1, 2, 4, 6])
+        assert_frame_equal(rs, xp)
+
     def test_irow_icol_duplicates(self):
         df = DataFrame(np.random.rand(3,3), columns=list('ABC'),
                        index=list('aab'))
 
-        result = df.irow(0)
+        result = df.irow[0]
         result2 = df.ix[0]
         self.assert_(isinstance(result, Series))
         assert_almost_equal(result.values, df.values[0])
         assert_series_equal(result, result2)
 
-        result = df.T.icol(0)
+        result = df.T.icol[0]
         result2 = df.T.ix[:, 0]
         self.assert_(isinstance(result, Series))
         assert_almost_equal(result.values, df.values[0])
         assert_series_equal(result, result2)
+
+    def test_irow_set(self):
+        df = DataFrame(np.random.randn(4, 10), columns=range(0, 20, 2)).T
+
+        exp = df.irow(2) * 2
+        df.irow[2] = exp.copy()
+        result = df.irow[2]
+        assert_series_equal(result, exp)
+
+        # slice
+        xp = df.irow[4:8] * 2
+        df.irow[4:8] = xp
+        rs = df.irow(slice(4, 8))
+        assert_frame_equal(rs, xp)
+
+        # list of integers
+        xp = df.irow[[1, 2, 4, 6]] * 2
+        df.irow[[1, 2, 4, 6]] = xp
+        rs = df.irow([1, 2, 4, 6])
+        assert_frame_equal(rs, xp)
 
     def test_iget_value(self):
         for i, row in enumerate(self.frame.index):

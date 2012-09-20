@@ -114,47 +114,47 @@ class TestResample(unittest.TestCase):
 
         self.assertEquals(len(result), 3)
         self.assert_((result.index.dayofweek == [6,6,6]).all())
-        self.assertEquals(result.irow(0), s['1/2/2005'])
-        self.assertEquals(result.irow(1), s['1/9/2005'])
-        self.assertEquals(result.irow(2), s.irow(-1))
+        self.assertEquals(result.irow[0], s['1/2/2005'])
+        self.assertEquals(result.irow[1], s['1/9/2005'])
+        self.assertEquals(result.irow[2], s.irow[-1])
 
         result = s.resample('W-MON', how='last')
         self.assertEquals(len(result), 2)
         self.assert_((result.index.dayofweek == [0,0]).all())
-        self.assertEquals(result.irow(0), s['1/3/2005'])
-        self.assertEquals(result.irow(1), s['1/10/2005'])
+        self.assertEquals(result.irow[0], s['1/3/2005'])
+        self.assertEquals(result.irow[1], s['1/10/2005'])
 
         result = s.resample('W-TUE', how='last')
         self.assertEquals(len(result), 2)
         self.assert_((result.index.dayofweek == [1,1]).all())
-        self.assertEquals(result.irow(0), s['1/4/2005'])
-        self.assertEquals(result.irow(1), s['1/10/2005'])
+        self.assertEquals(result.irow[0], s['1/4/2005'])
+        self.assertEquals(result.irow[1], s['1/10/2005'])
 
         result = s.resample('W-WED', how='last')
         self.assertEquals(len(result), 2)
         self.assert_((result.index.dayofweek == [2,2]).all())
-        self.assertEquals(result.irow(0), s['1/5/2005'])
-        self.assertEquals(result.irow(1), s['1/10/2005'])
+        self.assertEquals(result.irow[0], s['1/5/2005'])
+        self.assertEquals(result.irow[1], s['1/10/2005'])
 
         result = s.resample('W-THU', how='last')
         self.assertEquals(len(result), 2)
         self.assert_((result.index.dayofweek == [3,3]).all())
-        self.assertEquals(result.irow(0), s['1/6/2005'])
-        self.assertEquals(result.irow(1), s['1/10/2005'])
+        self.assertEquals(result.irow[0], s['1/6/2005'])
+        self.assertEquals(result.irow[1], s['1/10/2005'])
 
         result = s.resample('W-FRI', how='last')
         self.assertEquals(len(result), 2)
         self.assert_((result.index.dayofweek == [4,4]).all())
-        self.assertEquals(result.irow(0), s['1/7/2005'])
-        self.assertEquals(result.irow(1), s['1/10/2005'])
+        self.assertEquals(result.irow[0], s['1/7/2005'])
+        self.assertEquals(result.irow[1], s['1/10/2005'])
 
         # to biz day
         result = s.resample('B', how='last')
         self.assertEquals(len(result), 6)
         self.assert_((result.index.dayofweek == [0,1,2,3,4,0]).all())
-        self.assertEquals(result.irow(0), s['1/3/2005'])
-        self.assertEquals(result.irow(1), s['1/4/2005'])
-        self.assertEquals(result.irow(5), s['1/10/2005'])
+        self.assertEquals(result.irow[0], s['1/3/2005'])
+        self.assertEquals(result.irow[1], s['1/4/2005'])
+        self.assertEquals(result.irow[5], s['1/10/2005'])
         self.assert_(result.index.name == 'index')
 
     def test_resample_frame_basic(self):
@@ -241,13 +241,13 @@ class TestResample(unittest.TestCase):
         self.assertEquals(len(result), len(expect))
         self.assertEquals(len(result.columns), 4)
 
-        xs = result.irow(-1)
+        xs = result.irow[-1]
         self.assertEquals(xs['open'], s[-5])
         self.assertEquals(xs['high'], s[-5:].max())
         self.assertEquals(xs['low'], s[-5:].min())
         self.assertEquals(xs['close'], s[-1])
 
-        xs = result.irow(1)
+        xs = result.irow[1]
         self.assertEquals(xs['open'], s[1])
         self.assertEquals(xs['high'], s[1:6].max())
         self.assertEquals(xs['low'], s[1:6].min())

@@ -319,7 +319,7 @@ class DataFrameFormatter(object):
     def _format_col(self, i):
         col = self.columns[i]
         formatter = self.formatters.get(col)
-        return format_array(self.frame.icol(i).values, formatter,
+        return format_array(self.frame.icol[i].values, formatter,
                             float_format=self.float_format,
                             na_rep=self.na_rep,
                             space=self.col_space)

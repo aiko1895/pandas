@@ -28,7 +28,8 @@ from pandas.core.common import (isnull, notnull, PandasError, _try_sort,
                                 _default_index, _stringify)
 from pandas.core.generic import NDFrame
 from pandas.core.index import Index, MultiIndex, _ensure_index
-from pandas.core.indexing import _NDFrameIndexer, _maybe_droplevels
+from pandas.core.indexing import (_NDFrameIndexer, _NDFrameIntIndexer,
+                                  _maybe_droplevels)
 from pandas.core.internals import BlockManager, make_block, form_blocks
 from pandas.core.series import Series, _radd_compat
 from pandas.compat.scipy import scoreatpercentile as _quantile
@@ -525,6 +526,15 @@ class DataFrame(NDFrame):
             self._ix = _NDFrameIndexer(self)
 
         return self._ix
+
+    _iix = None
+
+    @property
+    def iix(self):
+        if self._iix is None:
+            self._iix = _NDFrameIntIndexer(self)
+
+        return self._iix
 
     @property
     def shape(self):
@@ -1402,7 +1412,7 @@ class DataFrame(NDFrame):
     def get_dtype_counts(self):
         counts = {}
         for i in range(len(self.columns)):
-            series = self.icol(i)
+            series = self.icol[i]
             # endianness can cause dtypes to look different
             dtype_str = str(series.dtype)
             if dtype_str in counts:
@@ -1582,7 +1592,10 @@ class DataFrame(NDFrame):
 
             return result.set_value(index, col, value)
 
-    def irow(self, i, copy=False):
+    _ir = None
+
+    @property
+    def irow(self):
         """
         Retrieve the i-th row or rows of the DataFrame by location
 
@@ -1598,21 +1611,14 @@ class DataFrame(NDFrame):
         -------
         row : Series (int) or DataFrame (slice, sequence)
         """
-        if isinstance(i, slice):
-            return self[i]
-        else:
-            label = self.index[i]
-            if isinstance(label, Index):
-                return self.reindex(label)
-            else:
-                try:
-                    new_values = self._data.fast_2d_xs(i, copy=copy)
-                except:
-                    new_values = self._data.fast_2d_xs(i, copy=True)
-                return Series(new_values, index=self.columns,
-                              name=self.index[i])
+        if self._ir is None:
+            self._ir = _NDFrameIntIndexer(self, axis=0)
+        return self._ir
 
-    def icol(self, i):
+    _ic = None
+
+    @property
+    def icol(self):
         """
         Retrieve the i-th column or columns of the DataFrame by location
 
@@ -1628,24 +1634,15 @@ class DataFrame(NDFrame):
         -------
         column : Series (int) or DataFrame (slice, sequence)
         """
-        label = self.columns[i]
-        if isinstance(i, slice):
-            # need to return view
-            lab_slice = slice(label[0], label[-1])
-            return self.ix[:, lab_slice]
-        else:
-            label = self.columns[i]
-            if isinstance(label, Index):
-                return self.reindex(columns=label)
-
-            values = self._data.iget(i)
-            return Series(values, index=self.index, name=label)
+        if self._ic is None:
+            self._ic = _NDFrameIntIndexer(self, axis=1)
+        return self._ic
 
     def _ixs(self, i, axis=0):
         if axis == 0:
-            return self.irow(i)
+            return self.irow[i]
         else:
-            return self.icol(i)
+            return self.icol[i]
 
     def iget_value(self, i, j):
         """
@@ -2298,9 +2295,9 @@ class DataFrame(NDFrame):
         new_columns, col_indexer = self.columns.reindex(new_columns)
 
         if row_indexer is not None and col_indexer is not None:
-            new_values = com.take_2d_multi(self.values, row_indexer,
-                                           col_indexer, fill_value=fill_value)
-            return DataFrame(new_values, index=new_index, columns=new_columns)
+            return self._reindex_with_indexers(new_index, row_indexer,
+                                               new_columns, col_indexer, copy,
+                                               fill_value)
         elif row_indexer is not None:
             return self._reindex_with_indexers(new_index, row_indexer,
                                                None, None, copy, fill_value)
@@ -2327,6 +2324,11 @@ class DataFrame(NDFrame):
 
     def _reindex_with_indexers(self, index, row_indexer, columns, col_indexer,
                                copy, fill_value):
+        if row_indexer is not None and col_indexer is not None:
+            new_values = com.take_2d_multi(self.values, row_indexer,
+                                           col_indexer, fill_value=fill_value)
+            return DataFrame(new_values, index=index, columns=columns)
+
         new_data = self._data
         if row_indexer is not None:
             row_indexer = com._ensure_int64(row_indexer)
@@ -3750,7 +3752,7 @@ class DataFrame(NDFrame):
             pass
 
         if axis == 0:
-            series_gen = (self.icol(i) for i in range(len(self.columns)))
+            series_gen = (self.icol[i] for i in range(len(self.columns)))
             res_index = self.columns
             res_columns = self.index
         elif axis == 1:

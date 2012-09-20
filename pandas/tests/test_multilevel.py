@@ -1468,7 +1468,7 @@ x   q   30      3    -0.6662 -0.5243 -0.3580  0.89145  2.5838"""
                           columns=columns)
 
         result = frame.ix[:, 1]
-        exp = frame.icol(1)
+        exp = frame.icol[1]
         self.assert_(isinstance(result, Series))
         assert_series_equal(result, exp)
 

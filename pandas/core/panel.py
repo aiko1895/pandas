@@ -12,7 +12,8 @@ from pandas.core.common import (PandasError, _mut_exclusive,
 from pandas.core.categorical import Factor
 from pandas.core.index import (Index, MultiIndex, _ensure_index,
                                _get_combined_index)
-from pandas.core.indexing import _NDFrameIndexer, _maybe_droplevels
+from pandas.core.indexing import (_NDFrameIndexer, _NDFrameIntIndexer,
+                                  _maybe_droplevels)
 from pandas.core.internals import BlockManager, make_block, form_blocks
 from pandas.core.frame import DataFrame
 from pandas.core.generic import NDFrame
@@ -450,6 +451,14 @@ class Panel(NDFrame):
 
         return self._ix
 
+    _iix = None
+
+    @property
+    def iix(self):
+        if self._iix is None:
+            self._iix = _NDFrameIntIndexer(self)
+        return self._iix
+
     def _wrap_array(self, arr, axes, copy=False):
         items, major, minor = axes
         return self._constructor(arr, items=items, major_axis=major,
@@ -703,10 +712,6 @@ class Panel(NDFrame):
         return result
 
     def _reindex_multi(self, items, major, minor):
-        a0, a1, a2 = len(items), len(major), len(minor)
-
-        values = self.values
-        new_values = np.empty((a0, a1, a2), dtype=values.dtype)
 
         new_items, indexer0 = self.items.reindex(items)
         new_major, indexer1 = self.major_axis.reindex(major)
@@ -721,12 +726,22 @@ class Panel(NDFrame):
         if indexer2 is None:
             indexer2 = range(len(new_minor))
 
+        return self._reindex_with_indexers(indexer0, new_items, indexer1,
+                                           new_major, indexer2, new_minor)
+
+    def _reindex_with_indexers(self, indexer0, new_items, indexer1, new_major,
+                               indexer2, new_minor):
+        a0, a1, a2 = len(new_items), len(new_major), len(new_minor)
+        values = self.values
+        new_values = np.empty((a0, a1, a2), dtype=values.dtype)
+
         for i, ind in enumerate(indexer0):
-            com.take_2d_multi(values[ind], indexer1, indexer2,
+            com.take_2d_multi(self.values[ind], indexer1, indexer2,
                               out=new_values[i])
 
         return Panel(new_values, items=new_items, major_axis=new_major,
                      minor_axis=new_minor)
+
 
     def reindex_axis(self, labels, axis=0, method=None, level=None, copy=True):
         """Conform Panel to new index with optional filling logic, placing

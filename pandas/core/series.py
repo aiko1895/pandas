@@ -19,7 +19,7 @@ from pandas.core.common import (isnull, notnull, _is_bool_indexer,
                                 _asarray_tuplesafe, is_integer_dtype)
 from pandas.core.index import (Index, MultiIndex, InvalidIndexError,
                                _ensure_index, _handle_legacy_indexes)
-from pandas.core.indexing import _SeriesIndexer
+from pandas.core.indexing import _SeriesIndexer, _SeriesIntIndexer
 from pandas.tseries.index import DatetimeIndex
 from pandas.tseries.period import PeriodIndex, Period
 from pandas.util import py3compat
@@ -740,8 +740,20 @@ copy : boolean, default False
             else:
                 return lib.get_value_at(self, i)
 
-    iget = iget_value
-    irow = iget_value
+    _iix = None
+
+    def _get_iix(self):
+        if self._iix is None:
+            self._iix = _SeriesIntIndexer(self)
+        return self._iix
+
+    @property
+    def irow(self):
+        return self._get_iix()
+
+    @property
+    def icol(self):
+        return self._get_iix()
 
     def get_value(self, label):
         """
