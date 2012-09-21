@@ -752,7 +752,11 @@ copy : boolean, default False
         return self._get_iix()
 
     @property
-    def icol(self):
+    def iget(self):
+        return self._get_iix()
+
+    @property
+    def iix(self):
         return self._get_iix()
 
     def get_value(self, label):

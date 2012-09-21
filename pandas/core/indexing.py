@@ -143,7 +143,7 @@ class _NDFrameIndexer(object):
         # indexer to assign Series can be tuple or scalar
         if isinstance(indexer, tuple):
             for i, idx in enumerate(indexer):
-                ax = self.obj.axes[i]
+                ax = self.obj._get_axis(i)
                 if _is_sequence(idx) or isinstance(idx, slice):
                     new_ix = ax[idx]
                     if ser.index.equals(new_ix):
@@ -168,7 +168,7 @@ class _NDFrameIndexer(object):
         if isinstance(indexer, tuple):
             idx, cols = None, None
             for i, ix in enumerate(indexer):
-                ax = self.obj.axes[i]
+                ax = self.obj._get_axis(i)
                 if _is_sequence(ix) or isinstance(ix, slice):
                     if idx is None:
                         idx = ax[ix]
@@ -194,8 +194,8 @@ class _NDFrameIndexer(object):
             return val
 
         elif np.isscalar(indexer) and not is_frame:
-            idx = self.obj.axes[1]
-            cols = self.obj.axes[2]
+            idx = self.obj._get_axis(1)
+            cols = self.obj._get_axis(2)
 
             if idx.equals(df.index) and cols.equals(df.columns):
                 return df.copy().values
@@ -653,10 +653,38 @@ class _NDFrameIntIndexer(_NDFrameIndexer):
         return self.__getitem__(key)
 
     def __getitem__(self, key):
+        key = self._validate_key(key)
         if self.axis is not None:
             return self._getitem_axis(key, axis=self.axis)
 
         return super(_NDFrameIntIndexer, self).__getitem__(key)
+
+    def _validate_key(self, key):
+        if isinstance(key, tuple):
+            key = self._validate_tuple(key)
+        else:
+            axis = self.axis
+            if axis is None:
+                axis = 0
+            key = self._validate_indexer(key, axis)
+        return key
+
+    def _validate_indexer(self, indexer, i):
+        if com.is_list_like(indexer):
+            if not isinstance(indexer, np.ndarray):
+                indexer = _asarray_tuplesafe(indexer)
+            ax = self.obj._get_axis(i)
+            indexer = np.where(indexer < 0, len(ax) + indexer, indexer)
+
+            return indexer
+        elif isinstance(indexer, slice):
+            assert _is_positional_slice(indexer)
+        else:
+            assert com.is_integer(indexer)
+        return indexer
+
+    def _validate_tuple(self, tup):
+        return tuple([self._validate_indexer(k, i) for i, k in enumerate(tup)])
 
     def _multi_take(self, tup):
         from pandas.core.frame import DataFrame
@@ -703,13 +731,11 @@ class _NDFrameIntIndexer(_NDFrameIndexer):
                 return self.obj
             return self._slice(key, axis=axis)
 
-        elif _is_list_like(key):
+        elif com.is_list_like(key):
             keyarr = key
             if not isinstance(key, Index):
                 keyarr = _asarray_tuplesafe(key)
-
             return self.obj.take(keyarr, axis=axis)
-
         else:
             return self._get_loc(key, axis=axis)
 
@@ -730,14 +756,18 @@ class _NDFrameIntIndexer(_NDFrameIndexer):
                     values = self.obj._data.fast_2d_xs(key, copy=True)
 
             return Series(values, index=self.obj._get_axis(1-axis),
-                          name=self.obj.axes[axis][key])
+                          name=self.obj._get_axis(axis)[key])
 
         self.obj._consolidate_inplace()
         axis_number = self.obj._get_axis_number(axis)
-        new_data = self.obj._data.xs(key, axis=axis_number)
+        if axis_number == 0:
+            new_data = self.obj._data.iget(key)
+        else:
+            new_data = self.obj._data.xs(key, axis=axis_number)
         return DataFrame(new_data)
 
     def __setitem__(self, key, value):
+        key = self._validate_key(key)
         if isinstance(key, tuple):
             if len(key) > self.ndim:
                 raise IndexingError('only tuples of length <= %d supported',

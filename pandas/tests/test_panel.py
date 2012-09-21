@@ -513,6 +513,38 @@ class CheckIndexing(object):
         assert_panel_equal(p.ix[:, :, cols],
                            p.reindex(minor=cols))
 
+    def test_getitem_fancy_iix(self):
+        p = self.panel
+
+        items = p.items[[1, 0]]
+        dates = p.major_axis[::2]
+        cols = ['D', 'C', 'F']
+        int_cols = p.minor_axis.get_indexer(cols)
+
+        # all 3 specified
+        assert_panel_equal(p.iix[[1, 0], ::2, int_cols],
+                           p.reindex(items=items, major=dates, minor=cols))
+
+        # 2 specified
+        assert_panel_equal(p.iix[:, ::2, int_cols],
+                           p.reindex(major=dates, minor=cols))
+
+        assert_panel_equal(p.iix[[1, 0], :, int_cols],
+                           p.reindex(items=items, minor=cols))
+
+        assert_panel_equal(p.iix[[1, 0], ::2, :],
+                           p.reindex(items=items, major=dates))
+
+        # only 1
+        assert_panel_equal(p.iix[[1, 0], :, :],
+                           p.reindex(items=items))
+
+        assert_panel_equal(p.iix[:, ::2, :],
+                           p.reindex(major=dates))
+
+        assert_panel_equal(p.iix[:, :, int_cols],
+                           p.reindex(minor=cols))
+
     def test_getitem_fancy_slice(self):
         pass
 
@@ -583,6 +615,15 @@ class CheckIndexing(object):
 
         assert_frame_equal(a.ix[:, 22, [111, 333]], b)
 
+    def test_iix_setitem_slice_dataframe(self):
+        a = Panel(items=[1,2,3],major_axis=[11,22,33],minor_axis=[111,222,333])
+        b = DataFrame(np.random.randn(2,3), index=[111,333],
+                      columns=[1,2,3])
+
+        a.iix[:, 1, [0, 2]] = b
+
+        assert_frame_equal(a.ix[:, 22, [111, 333]], b)
+
     def test_ix_align(self):
         from pandas import Series
         b = Series(np.random.randn(10))
@@ -600,6 +641,24 @@ class CheckIndexing(object):
         df = df_orig.swapaxes(1, 2)
         df.ix[0, 0, :] = b
         assert_series_equal(df.ix[0, 0, :].reindex(b.index), b)
+
+    def test_iix_align(self):
+        from pandas import Series
+        b = Series(np.random.randn(10))
+        b.sort()
+        df_orig = Panel(np.random.randn(3, 10, 2))
+        df = df_orig.copy()
+
+        df.iix[0, :, 0] = b
+        assert_series_equal(df.iix[0, :, 0].reindex(b.index), b)
+
+        df = df_orig.swapaxes(0, 1)
+        df.iix[:, 0, 0] = b
+        assert_series_equal(df.iix[:, 0, 0].reindex(b.index), b)
+
+        df = df_orig.swapaxes(1, 2)
+        df.iix[0, 0, :] = b
+        assert_series_equal(df.iix[0, 0, :].reindex(b.index), b)
 
     def test_ix_frame_align(self):
         from pandas import DataFrame
@@ -620,6 +679,27 @@ class CheckIndexing(object):
         p = p_orig.copy()
         p.ix[0, [0, 1, 3, 5], -2:] = df
         out = p.ix[0, [0, 1, 3, 5], -2:]
+        assert_frame_equal(out, df.T.reindex([0, 1, 3, 5], p.minor_axis[-2:]))
+
+    def test_iix_frame_align(self):
+        from pandas import DataFrame
+        df = DataFrame(np.random.randn(2, 10))
+        df.sort_index(inplace=True)
+        p_orig = Panel(np.random.randn(3, 10, 2))
+
+        p = p_orig.copy()
+        p.iix[0, :, :] = df
+        out = p.iix[0, :, :].T.reindex(df.index, columns=df.columns)
+        assert_frame_equal(out, df)
+
+        p = p_orig.copy()
+        p.iix[0] = df
+        out = p.iix[0].T.reindex(df.index, columns=df.columns)
+        assert_frame_equal(out, df)
+
+        p = p_orig.copy()
+        p.iix[0, [0, 1, 3, 5], -2:] = df
+        out = p.iix[0, [0, 1, 3, 5], -2:]
         assert_frame_equal(out, df.T.reindex([0, 1, 3, 5], p.minor_axis[-2:]))
 
     def _check_view(self, indexer, comp):

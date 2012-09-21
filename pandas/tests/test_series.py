@@ -894,6 +894,22 @@ class TestSeries(unittest.TestCase, CheckNameIntegration):
         self.assertEquals(self.ts.ix[d1], self.ts[d1])
         self.assertEquals(self.ts.ix[d2], self.ts[d2])
 
+    def test_iix_getitem(self):
+        int_ix = [3, 4, 7]
+        inds = self.series.index[int_ix]
+        assert_series_equal(self.series.iix[int_ix], self.series.reindex(inds))
+        assert_series_equal(self.series.iix[5::2], self.series[5::2])
+
+        # slice with indices
+        d1, d2 = self.ts.index[[5, 15]]
+        result = self.ts.iix[5:16]
+        expected = self.ts.truncate(d1, d2)
+        assert_series_equal(result, expected)
+
+        # ask for index value
+        self.assertEquals(self.ts.iix[5], self.ts[d1])
+        self.assertEquals(self.ts.iix[15], self.ts[d2])
+
     def test_ix_getitem_not_monotonic(self):
         d1, d2 = self.ts.index[[5, 15]]
 
@@ -927,6 +943,24 @@ class TestSeries(unittest.TestCase, CheckNameIntegration):
         self.assertRaises(KeyError, s2.ix.__getitem__, slice(3, 11))
         self.assertRaises(KeyError, s2.ix.__setitem__, slice(3, 11), 0)
 
+    def test_iix_getitem_setitem_integer_slice(self):
+        s = Series(np.random.randn(10), index=range(0, 20, 2))
+
+        # this is OK
+        cp = s.copy()
+        cp.iix[4:10] = 0
+        self.assert_((cp.iix[4:10] == 0).all())
+
+        # so is this
+        cp = s.copy()
+        cp.iix[3:11] = 0
+        self.assert_((cp.iix[3:11] == 0).values.all())
+
+        result = s.iix[2:6]
+        expected = s.reindex([4, 6, 8, 10])
+
+        assert_series_equal(result, expected)
+
     def test_ix_getitem_iterator(self):
         idx = iter(self.series.index[:10])
         result = self.series.ix[idx]
@@ -958,6 +992,33 @@ class TestSeries(unittest.TestCase, CheckNameIntegration):
         self.assertEquals(self.series[d1], 4)
         self.assertEquals(self.series[d2], 6)
 
+    def test_iix_setitem(self):
+        int_ix = [3, 4, 7]
+        inds = self.series.index[int_ix]
+
+        result = self.series.copy()
+        result.iix[int_ix] = 5
+
+        expected = self.series.copy()
+        expected[int_ix] = 5
+        assert_series_equal(result, expected)
+
+        result.iix[5:10] = 10
+        expected[5:10] = 10
+        assert_series_equal(result, expected)
+
+        # set slice with indices
+        d1, d2 = self.series.index[[5, 15]]
+        result.iix[5:16] = 6
+        expected[5:16] = 6 # because it's inclusive
+        assert_series_equal(result, expected)
+
+        # set index value
+        self.series.iix[5] = 4
+        self.series.iix[15] = 6
+        self.assertEquals(self.series[d1], 4)
+        self.assertEquals(self.series[d2], 6)
+
     def test_ix_setitem_boolean(self):
         mask = self.series > self.series.median()
 
@@ -972,6 +1033,11 @@ class TestSeries(unittest.TestCase, CheckNameIntegration):
         self.series.ix[inds] = 5
         self.assertRaises(Exception, self.series.ix.__setitem__,
                           inds + ['foo'], 5)
+
+    def test_iix_setitem_corner(self):
+        int_ix = [5, 8, 12]
+        inds = list(self.series.index[int_ix])
+        self.series.iix[int_ix] = 5
 
     def test_get_set_boolean_different_order(self):
         ordered = self.series.order()

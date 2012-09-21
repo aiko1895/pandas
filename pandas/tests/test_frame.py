@@ -76,6 +76,10 @@ class CheckIndexing(object):
         expected = self.frame.ix[:, ['A', 'B', 'C']]
         assert_frame_equal(result, expected)
 
+        idx = self.frame.columns.get_indexer(['A', 'B', 'C'])
+        result = self.frame.iix[:, iter(idx)]
+        assert_frame_equal(result, expected)
+
     def test_getitem_list(self):
         self.frame.columns.name = 'foo'
 
@@ -85,6 +89,9 @@ class CheckIndexing(object):
         expected = self.frame.ix[:, ['B', 'A']]
         assert_frame_equal(result, expected)
         assert_frame_equal(result2, expected)
+
+        rs = self.frame.iix[:, self.frame.columns.get_indexer(['B', 'A'])]
+        assert_frame_equal(rs, expected)
 
         self.assertEqual(result.columns.name, 'foo')
 
@@ -103,6 +110,9 @@ class CheckIndexing(object):
         assert_frame_equal(result, expected)
         self.assertEqual(result.columns.name, 'sth')
 
+        rs = df.iix[:, :2]
+        assert_frame_equal(rs, expected)
+
     def test_setitem_list(self):
         self.frame['E'] = 'foo'
         data = self.frame[['A', 'B']]
@@ -110,6 +120,7 @@ class CheckIndexing(object):
 
         assert_series_equal(self.frame['B'], data['A'])
         assert_series_equal(self.frame['A'], data['B'])
+
 
     def test_setitem_list_not_dataframe(self):
         data = np.random.randn(len(self.frame), 2)
@@ -170,32 +181,45 @@ class CheckIndexing(object):
         result = df.ix[:-1]
         expected = df.ix[df.index[:-1]]
         assert_frame_equal(result, expected)
+        rs = df.iix[:-1]
+        assert_frame_equal(rs, expected)
 
         result = df.ix[[1, 10]]
         expected = df.ix[Index([1, 10], dtype=object)]
         assert_frame_equal(result, expected)
+        rs = df.iix[[0, 1]]
+        assert_frame_equal(rs, expected)
 
     def test_getitem_setitem_ix_negative_integers(self):
         result = self.frame.ix[:, -1]
         assert_series_equal(result, self.frame['D'])
+        assert_series_equal(self.frame.iix[:, -1], self.frame['D'])
 
         result = self.frame.ix[:, [-1]]
         assert_frame_equal(result, self.frame[['D']])
+        assert_frame_equal(self.frame.iix[:, [-1]], self.frame[['D']])
 
         result = self.frame.ix[:, [-1, -2]]
         assert_frame_equal(result, self.frame[['D', 'C']])
+        assert_frame_equal(self.frame.iix[:, [-1, -2]], self.frame[['D', 'C']])
 
         self.frame.ix[:, [-1]] = 0
         self.assert_((self.frame['D'] == 0).all())
+        self.frame.iix[:, [-1]] = -1
+        self.assert_((self.frame['D'] == -1).all())
 
         df = DataFrame(np.random.randn(8, 4))
         self.assert_(isnull(df.ix[:, [-1]].values).all())
+        assert_frame_equal(df.iix[:, [-1]], df.ix[:, [3]])
 
         # #1942
         a = DataFrame(randn(20,2), index=[chr(x+65) for x in range(20)])
         a.ix[-1] = a.ix[-2]
-
         assert_series_equal(a.ix[-1], a.ix[-2])
+
+        a = DataFrame(randn(20,2), index=[chr(x+65) for x in range(20)])
+        a.iix[-1] = a.iix[-2]
+        assert_series_equal(a.iix[-1], a.iix[-2])
 
     def test_getattr(self):
         tm.assert_series_equal(self.frame.A, self.frame['A'])
@@ -371,6 +395,15 @@ class CheckIndexing(object):
         assert( df.ix[1, 'title'] == 'foobar' )
         assert( df.ix[1, 'cruft'] == 0 )
 
+        df = DataFrame(data)
+        int_ix = df.index.get_indexer(ix)
+
+        df.iix[int_ix, [1]] = 'foobar'
+        df.iix[int_ix, [0]] = 0
+
+        assert( df.ix[1, 1] == 'foobar' )
+        assert( df.ix[1, 0] == 0 )
+
     def test_setitem_ambig(self):
         # difficulties with mixed-type data
         from decimal import Decimal
@@ -409,6 +442,14 @@ class CheckIndexing(object):
         expected = Series([np.nan, np.nan, 42, 42], index=df.index)
         self.assert_(df['z'] is not foo)
         assert_series_equal(df['z'], expected)
+
+        df = DataFrame({'x': [1.1, 2.1, 3.1, 4.1], 'y': [5.1, 6.1, 7.1, 8.1]},
+                       index=[0,1,2,3])
+        df.insert(2, 'z', np.nan)
+
+        df.iix[2:, 2] = 42
+        assert_series_equal(df.iix[:, 2],
+                            Series([np.nan, np.nan, 42, 42], index=df.index))
 
     def test_setitem_None(self):
         # GH #766
@@ -456,6 +497,34 @@ class CheckIndexing(object):
 
         self.assertRaises(ValueError, ix.__getitem__, f > 0.5)
 
+    def test_getitem_fancy_2d_iix(self):
+        f = self.frame
+        ix = f.iix
+
+        int_idx = f.columns.get_indexer(['B', 'A'])
+        assert_frame_equal(ix[:, int_idx], f.reindex(columns=['B', 'A']))
+
+        subidx = [5, 4, 1]
+        assert_frame_equal(ix[subidx, int_idx],
+                           f.reindex(index=self.frame.index[subidx],
+                                     columns=['B', 'A']))
+
+        # slicing rows, etc.
+        assert_frame_equal(ix[5:10], f[5:10])
+        assert_frame_equal(ix[5:10, :], f[5:10])
+        rs = ix[:5, self.frame.columns.get_indexer(['A', 'B'])]
+        xp = f.reindex(index=f.index[:5], columns=['A', 'B'])
+        assert_frame_equal(rs, xp)
+
+        # slice columns
+        assert_frame_equal(ix[:, :2], f.reindex(columns=['A', 'B']))
+
+        # get view
+        exp = f.copy()
+        ix[5:10].values[:] = 5
+        exp.values[5:10] = 5
+        assert_frame_equal(f, exp)
+
     def test_slice_floats(self):
         index = [52195.504153, 52196.303147, 52198.369883]
         df = DataFrame(np.random.rand(3, 2), index=index)
@@ -477,6 +546,11 @@ class CheckIndexing(object):
         df.ix[:8:2] = np.nan
         self.assert_(isnull(df.ix[:8:2]).values.all())
 
+        df = DataFrame(np.random.randn(10, 5))
+        result = df.iix[:8:2]
+        df.iix[:8:2] = np.nan
+        self.assert_(isnull(df.iix[:8:2]).values.all())
+
     def test_getitem_setitem_integer_slice_keyerrors(self):
         df = DataFrame(np.random.randn(10, 5), index=range(0, 20, 2))
 
@@ -485,22 +559,37 @@ class CheckIndexing(object):
         cp.ix[4:10] = 0
         self.assert_((cp.ix[4:10] == 0).values.all())
 
+        cp = df.copy()
+        cp.iix[4:10] = 0
+        self.assert_((cp.ix[cp.index[4:10]] == 0).values.all())
+
         # so is this
         cp = df.copy()
         cp.ix[3:11] = 0
         self.assert_((cp.ix[3:11] == 0).values.all())
 
+        cp = df.copy()
+        cp.iix[3:8] = 0
+        self.assert_((cp.ix[cp.index[3:8]] == 0).values.all())
+
         result = df.ix[4:10]
         result2 = df.ix[3:11]
+        result3 = df.iix[2:6]
         expected = df.reindex([4, 6, 8, 10])
 
         assert_frame_equal(result, expected)
         assert_frame_equal(result2, expected)
+        assert_frame_equal(result3, expected)
 
         # non-monotonic, raise KeyError
         df2 = df[::-1]
         self.assertRaises(KeyError, df2.ix.__getitem__, slice(3, 11))
         self.assertRaises(KeyError, df2.ix.__setitem__, slice(3, 11), 0)
+
+        # but not for iix
+        rs = df2.iix[:3]
+        xp = df2.ix[[18, 16, 14], :]
+        assert_frame_equal(rs, xp)
 
     def test_setitem_fancy_2d(self):
         f = self.frame
@@ -599,13 +688,104 @@ class CheckIndexing(object):
         frame[frame['a'] == 2] = 100
         assert_frame_equal(frame, expected)
 
+    def test_setitem_fancy_2d_iix(self):
+        f = self.frame
+        ix = f.iix
+
+        # case 1
+        frame = self.frame.copy()
+        expected = frame.copy()
+        int_ix = frame.columns.get_indexer(['B', 'A'])
+        frame.iix[:, int_ix] = 1.
+        expected['B'] = 1.
+        expected['A'] = 1.
+        assert_frame_equal(frame, expected)
+
+        # case 2
+        frame = self.frame.copy()
+        frame2 = self.frame.copy()
+        expected = frame.copy()
+
+        subidx = self.frame.index[[5, 4, 1]]
+        values = randn(3, 2)
+
+        frame.iix[[5, 4, 1], int_ix] = values
+        frame2.iix[[5, 4, 1], int_ix] = values
+
+        expected['B'].ix[subidx] = values[:, 0]
+        expected['A'].ix[subidx] = values[:, 1]
+
+        assert_frame_equal(frame, expected)
+        assert_frame_equal(frame2, expected)
+
+        # case 3: slicing rows, etc.
+        frame = self.frame.copy()
+
+        expected1 = self.frame.copy()
+        frame.iix[5:10] = 1.
+        expected1.values[5:10] = 1.
+        assert_frame_equal(frame, expected1)
+
+        expected2 = self.frame.copy()
+        arr = randn(5, len(frame.columns))
+        frame.iix[5:10] = arr
+        expected2.values[5:10] = arr
+        assert_frame_equal(frame, expected2)
+
+        # case 4
+        frame = self.frame.copy()
+        frame.iix[5:10, :] = 1.
+        assert_frame_equal(frame, expected1)
+        frame.iix[5:10, :] = arr
+        assert_frame_equal(frame, expected2)
+
+        # case 5
+        frame = self.frame.copy()
+        frame2 = self.frame.copy()
+
+        expected = self.frame.copy()
+        values = randn(5, 2)
+
+        int_ix = frame.columns.get_indexer(['A', 'B'])
+        frame.iix[:5, int_ix] = values
+        expected['A'][:5] = values[:, 0]
+        expected['B'][:5] = values[:, 1]
+        assert_frame_equal(frame, expected)
+
+        frame2.ix[:5, [0, 1]] = values
+        assert_frame_equal(frame2, expected)
+
+        # case 6: slice rows with labels, inclusive!
+        frame = self.frame.copy()
+        expected = self.frame.copy()
+
+        frame.iix[5:11] = 5.
+        expected.values[5:11] = 5.
+        assert_frame_equal(frame, expected)
+
+        # case 7: slice columns
+        frame = self.frame.copy()
+        frame2 = self.frame.copy()
+        expected = self.frame.copy()
+
+        # slice indices
+        frame.iix[:, 1:3] = 4.
+        expected.values[:, 1:3] = 4.
+        assert_frame_equal(frame, expected)
 
     def test_fancy_getitem_slice_mixed(self):
         sliced = self.mixed_frame.ix[:, -3:]
         self.assert_(sliced['D'].dtype == np.float64)
 
+        sliced = self.mixed_frame.iix[:, -3:]
+        self.assert_(sliced['D'].dtype == np.float64)
+
         # get view with single block
         sliced = self.frame.ix[:, -3:]
+        sliced['C'] = 4.
+        self.assert_((self.frame['C'] == 4).all())
+
+        sliced = self.frame.iix[:, -3:]
         sliced['C'] = 4.
         self.assert_((self.frame['C'] == 4).all())
 
@@ -632,6 +812,27 @@ class CheckIndexing(object):
         exp.values[:, 2] = 5
         assert_frame_equal(tmp, exp)
 
+    def test_fancy_setitem_int_labels_iix(self):
+        df = DataFrame(np.random.randn(10, 5), index=np.arange(0, 20, 2))
+
+        tmp = df.copy()
+        exp = df.copy()
+        tmp.iix[[0, 1, 2]] = 5
+        exp.values[:3] = 5
+        assert_frame_equal(tmp, exp)
+
+        tmp = df.copy()
+        exp = df.copy()
+        tmp.iix[3] = 5
+        exp.values[3] = 5
+        assert_frame_equal(tmp, exp)
+
+        tmp = df.copy()
+        exp = df.copy()
+        tmp.iix[:, 2] = 5
+        exp.values[:, 2] = 5
+        assert_frame_equal(tmp, exp)
+
     def test_fancy_getitem_int_labels(self):
         df = DataFrame(np.random.randn(10, 5), index=np.arange(0, 20, 2))
 
@@ -648,6 +849,25 @@ class CheckIndexing(object):
         assert_series_equal(result, expected)
 
         result = df.ix[:, 3]
+        expected = df[3]
+        assert_series_equal(result, expected)
+
+    def test_fancy_getitem_int_labels_iix(self):
+        df = DataFrame(np.random.randn(10, 5), index=np.arange(0, 20, 2))
+
+        result = df.iix[[2, 1, 0], [2, 0]]
+        expected = df.reindex(index=[4, 2, 0], columns=[2, 0])
+        assert_frame_equal(result, expected)
+
+        result = df.iix[[1, 0]].reindex([2, 1, 0])
+        expected = df.reindex(index=[2, 1, 0])
+        assert_frame_equal(result, expected)
+
+        result = df.iix[2]
+        expected = df.xs(4)
+        assert_series_equal(result, expected)
+
+        result = df.iix[:, 3]
         expected = df[3]
         assert_series_equal(result, expected)
 
@@ -895,6 +1115,55 @@ class CheckIndexing(object):
         expected['A'] = 7.
         assert_frame_equal(frame, expected)
 
+    def test_setitem_fancy_1d_iix(self):
+        # case 1: set cross-section for indices
+        frame = self.frame.copy()
+        expected = self.frame.copy()
+
+        int_ix = frame.columns.get_indexer(['C', 'B', 'A'])
+        frame.iix[2, int_ix] = [1., 2., 3.]
+        expected['C'][2] = 1.
+        expected['B'][2] = 2.
+        expected['A'][2] = 3.
+        assert_frame_equal(frame, expected)
+
+        frame2 = self.frame.copy()
+        frame2.iix[2, [3, 2, 1]] = [1., 2., 3.]
+        assert_frame_equal(frame, expected)
+
+        # case 2, set a section of a column
+        frame = self.frame.copy()
+        expected = self.frame.copy()
+
+        vals = randn(5)
+        expected.values[5:10, 2] = vals
+        frame.iix[5:10, 2] = vals
+        assert_frame_equal(frame, expected)
+
+        frame2 = self.frame.copy()
+        frame2.iix[5:10, frame2.columns.get_loc('B')] = vals
+        assert_frame_equal(frame, expected)
+
+        # case 3: full xs
+        frame = self.frame.copy()
+        expected = self.frame.copy()
+
+        frame.iix[4] = 5.
+        expected.values[4] = 5.
+        assert_frame_equal(frame, expected)
+
+        frame.iix[4] = 6.
+        expected.values[4] = 6.
+        assert_frame_equal(frame, expected)
+
+        # single column
+        frame = self.frame.copy()
+        expected = self.frame.copy()
+
+        frame.iix[:, frame.columns.get_loc('A')] = 7.
+        expected['A'] = 7.
+        assert_frame_equal(frame, expected)
+
     def test_getitem_fancy_scalar(self):
         f = self.frame
         ix = f.ix
@@ -916,6 +1185,20 @@ class CheckIndexing(object):
                 val = randn()
                 expected.values[i,j] = val
                 ix[idx, col] = val
+                assert_frame_equal(f, expected)
+
+    def test_setitem_fancy_scalar_iix(self):
+        f = self.frame
+        expected = self.frame.copy()
+        ix = f.iix
+        # individual value
+        for j, col in enumerate(f.columns):
+            ts = f[col]
+            for idx in f.index[::5]:
+                i = f.index.get_loc(idx)
+                val = randn()
+                expected.values[i,j] = val
+                ix[i, j] = val
                 assert_frame_equal(f, expected)
 
     def test_getitem_fancy_boolean(self):
@@ -1052,6 +1335,16 @@ class CheckIndexing(object):
         self.frame.ix[-2:, ['A', 'B']] = piece
         assert_almost_equal(self.frame.ix[-2:, ['A', 'B']].values,
                            piece.values)
+
+    def test_setitem_frame_align_iix(self):
+        int_ix = self.frame.columns.get_indexer(['A', 'B'])
+        piece = self.frame.iix[:2, int_ix]
+        piece.index = self.frame.index[-2:]
+        piece.columns = ['A', 'B']
+        self.frame.iix[-2:, int_ix] = piece
+        assert_almost_equal(self.frame.iix[-2:, int_ix].values,
+                           piece.values)
+
 
     def test_setitem_fancy_exceptions(self):
         pass
@@ -1194,6 +1487,9 @@ class CheckIndexing(object):
                                 (int, np.integer)))
 
         result = self.frame.ix[self.frame.index[5], 'E']
+        self.assert_(com.is_integer(result))
+
+        result = self.frame.iix[5, self.frame.columns.get_loc('E')]
         self.assert_(com.is_integer(result))
 
     def test_irow(self):
