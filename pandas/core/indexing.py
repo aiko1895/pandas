@@ -27,7 +27,6 @@ class _NDFrameIndexer(object):
     def __init__(self, obj):
         self.obj = obj
         self.ndim = obj.ndim
-        self.is_positional = False
 
     def __iter__(self):
         raise NotImplementedError('ix is not iterable')
@@ -35,10 +34,7 @@ class _NDFrameIndexer(object):
     def __getitem__(self, key):
         if type(key) is tuple:
             try:
-                if self.is_positional:
-                    return self.obj.iget_value(*key)
-                else:
-                    return self.obj.get_value(*key)
+                return self._get_val_from_obj(key)
             except Exception:
                 pass
 
@@ -46,11 +42,13 @@ class _NDFrameIndexer(object):
         else:
             return self._getitem_axis(key, axis=0)
 
+    def _get_val_from_obj(self, key):
+        return self.obj.get_value(*key)
+
     def _get_label(self, label, axis=0):
         # ueber-hack
         if (isinstance(label, tuple) and
             isinstance(label[axis], slice)):
-
             raise IndexingError('no slices here')
 
         try:
@@ -67,7 +65,7 @@ class _NDFrameIndexer(object):
     def __setitem__(self, key, value):
         # kludgetastic
         ax = self.obj._get_axis(0)
-        if not self.is_positional and isinstance(ax, MultiIndex):
+        if isinstance(ax, MultiIndex):
             try:
                 indexer = ax.get_loc(key)
                 self._setitem_with_indexer(indexer, value)
@@ -222,12 +220,12 @@ class _NDFrameIndexer(object):
             if _is_null_slice(key):
                 continue
 
-            if not self.is_positional:
-                retval = retval.ix._getitem_axis(key, axis=i)
-            else:
-                retval = retval.iix._getitem_axis(key, axis=i)
+            retval = self._get_from_axis(retval, key, i)
 
         return retval
+
+    def _get_from_axis(self, obj, key, axis):
+        return obj.ix._getitem_axis(key, axis=axis)
 
     def _multi_take_opportunity(self, tup):
         from pandas.core.generic import NDFrame
@@ -647,7 +645,6 @@ class _NDFrameIntIndexer(_NDFrameIndexer):
     def __init__(self, obj, axis=None):
         super(_NDFrameIntIndexer, self).__init__(obj)
         self.axis = axis
-        self.is_positional = True
 
     def __call__(self, key):
         return self.__getitem__(key)
@@ -658,6 +655,9 @@ class _NDFrameIntIndexer(_NDFrameIndexer):
             return self._getitem_axis(key, axis=self.axis)
 
         return super(_NDFrameIntIndexer, self).__getitem__(key)
+
+    def _get_val_from_obj(self, key):
+        return self.obj.iget_value(*key)
 
     def _validate_key(self, key):
         if isinstance(key, tuple):
@@ -738,6 +738,9 @@ class _NDFrameIntIndexer(_NDFrameIndexer):
             return self.obj.take(keyarr, axis=axis)
         else:
             return self._get_loc(key, axis=axis)
+
+    def _get_from_axis(self, obj, key, axis):
+        return obj.iix._getitem_axis(key, axis=axis)
 
     def _convert_to_indexer(self, obj, axis=0):
         return obj
