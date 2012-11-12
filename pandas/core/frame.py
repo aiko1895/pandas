@@ -1884,7 +1884,7 @@ class DataFrame(NDFrame):
         if self._is_mixed_type:
             raise ValueError('Cannot do boolean setting on mixed-type frame')
 
-        self.where(key, value, inplace=True)
+        self.where(-key, value, inplace=True)
 
     def _set_item_multiple(self, keys, value):
         if isinstance(value, DataFrame):
@@ -4877,6 +4877,7 @@ class DataFrame(NDFrame):
         ----------
         cond: boolean DataFrame or array
         other: scalar or DataFrame
+        inplace: boolean, default False
 
         Returns
         -------
@@ -4895,26 +4896,27 @@ class DataFrame(NDFrame):
             _, other = self.align(other, join='left', fill_value=NA)
 
         if inplace:
-            np.putmask(self.values, cond, other)
+            np.putmask(self.values, -cond, other)
             return self
 
         rs = np.where(cond, self, other)
         return self._constructor(rs, self.index, self.columns)
-        
-    def mask(self, cond):
+
+    def mask(self, cond, inplace=False):
         """
         Returns copy of self whose values are replaced with nan if the
-        corresponding entry in cond is False
+        corresponding entry in cond is True
 
         Parameters
         ----------
         cond: boolean DataFrame or array
+        inplace: boolean, default False
 
         Returns
         -------
         wh: DataFrame
         """
-        return self.where(cond, NA)
+        return self.where(cond, NA, inplace=inplace)
 
 _EMPTY_SERIES = Series([])
 

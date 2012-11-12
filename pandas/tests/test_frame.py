@@ -286,8 +286,9 @@ class CheckIndexing(object):
         assert_almost_equal(df.values, values)
 
         # a df that needs alignment first
-        df[df[:-1]<0] = 2
-        np.putmask(values[:-1],values[:-1]<0,2)
+        foo
+        df[df[:-1] < 0] = 2
+        np.putmask(values[:-1], values[:-1] < 0, 2)
         assert_almost_equal(df.values, values)
 
         self.assertRaises(Exception, df.__setitem__, df * 0, 2)
@@ -5248,13 +5249,34 @@ class TestDataFrame(unittest.TestCase, CheckIndexing,
         for k, v in rs.iteritems():
             assert_series_equal(v, np.where(cond[k], df[k], other5))
 
-        assert_frame_equal(rs, df.mask(cond))
+        assert_frame_equal(rs, df.mask(-cond))
 
         err1 = (df + 1).values[0:2, :]
         self.assertRaises(ValueError, df.where, cond, err1)
 
         err2 = cond.ix[:2, :].values
         self.assertRaises(ValueError, df.where, err2, other1)
+
+        #inplace
+        xp = df.where(cond, np.nan)
+        rs = df.where(cond, np.nan, inplace=True)
+        self.assert_(rs is df)
+        assert_frame_equal(rs, df)
+        assert_frame_equal(xp, df)
+
+
+    def test_mask(self):
+        df = DataFrame(np.random.randn(5, 3))
+        cond = df > 0
+
+        rs = df.mask(cond)
+        xp = DataFrame(np.where(cond, df, np.nan), df.index, df.columns)
+        assert_frame_equal(rs, xp)
+
+        #inplace
+        rs = df.mask(cond, inplace=True)
+        self.assert_(rs is df)
+        assert_frame_equal(df, xp)
 
 
     #----------------------------------------------------------------------
