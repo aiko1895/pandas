@@ -1,5 +1,7 @@
 cimport numpy as np
 cimport cython
+import cython
+from cython import parallel, threadlocal
 import numpy as np
 
 from numpy cimport *
@@ -7,6 +9,8 @@ from numpy cimport NPY_INT32 as NPY_int32
 from numpy cimport NPY_INT64 as NPY_int64
 from numpy cimport NPY_FLOAT32 as NPY_float32
 from numpy cimport NPY_FLOAT64 as NPY_float64
+
+from libc.math cimport sqrt as c_sqrt
 
 int32 = np.dtype(np.int32)
 int64 = np.dtype(np.int64)
