@@ -584,7 +584,8 @@ lib_ext = Extension('pandas.lib',
                     include_dirs=[np.get_include()],
                     libraries=libraries,
                     # pyrex_gdb=True,
-                    extra_compile_args=['-fopenmp']
+                    extra_compile_args=['-fopenmp'],
+                    extra_link_args=['-fopenmp']
                     )
 
 sparse_ext = Extension('pandas._sparse',

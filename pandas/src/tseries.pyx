@@ -1,7 +1,7 @@
 cimport numpy as np
 cimport cython
 import cython
-from cython import parallel, threadlocal
+from cython import parallel
 import numpy as np
 
 from numpy cimport *

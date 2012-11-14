@@ -300,12 +300,13 @@ def ewma(ndarray[double_t] input, double_t com, int adjust):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+@cython.cdivision(True)
 def nancorr(ndarray[float64_t, ndim=2] mat, cov=False):
     cdef:
-        Py_ssize_t i, j, xi, yi, N, K
+        Py_ssize_t i, j, xyi, xi, yi, N, K, idx_i = 0
         ndarray[float64_t, ndim=2] result
         ndarray[uint8_t, ndim=2] mask
-        int64_t nobs
+        uint64_t nobs = 0
         float64_t vx, vy, sumx, sumy, sumxx, sumyy, meanx, meany, divisor
         uint8_t calc_cov = cov
 
@@ -314,42 +315,42 @@ def nancorr(ndarray[float64_t, ndim=2] mat, cov=False):
     result = np.empty((K, K), dtype=np.float64)
     mask = np.isfinite(mat).view(np.uint8)
 
-    with cython.cdivision(True):
-        for xi in parallel.prange(K, nogil=True):
-            for yi in range(xi + 1):
-                nobs = sumxx = sumyy = sumx = sumy = 0
-                for i in range(N):
+    for xi in parallel.prange(K, nogil=True, num_threads=8, schedule='dynamic'):
+        for yi in range(xi + 1):
+            nobs = 0
+            sumxx = sumyy = sumx = sumy = 0
+            for i in xrange(N):
+                if mask[i, xi] and mask[i, yi]:
+                    vx = mat[i, xi]
+                    vy = mat[i, yi]
+                    nobs = nobs + 1
+                    sumx = sumx + vx
+                    sumy = sumy + vy
+
+            if nobs == 0:
+                result[xi, yi] = result[yi, xi] = NaN
+            else:
+                meanx = sumx / nobs
+                meany = sumy / nobs
+
+                # now the cov numerator
+                sumx = 0
+
+                for i in xrange(N):
                     if mask[i, xi] and mask[i, yi]:
-                        vx = mat[i, xi]
-                        vy = mat[i, yi]
-                        nobs += 1
-                        sumx += vx
-                        sumy += vy
+                        vx = mat[i, xi] - meanx
+                        vy = mat[i, yi] - meany
 
-                if nobs == 0:
-                    result[xi, yi] = result[yi, xi] = NaN
+                        sumx = sumx + vx * vy
+                        sumxx = sumxx + vx * vx
+                        sumyy = sumyy + vy * vy
+
+                divisor = (nobs - 1.0) if calc_cov else c_sqrt(sumxx * sumyy)
+
+                if divisor != 0:
+                    result[xi, yi] = result[yi, xi] = sumx / divisor
                 else:
-                    meanx = sumx / nobs
-                    meany = sumy / nobs
-
-                    # now the cov numerator
-                    sumx = 0
-
-                    for i in range(N):
-                        if mask[i, xi] and mask[i, yi]:
-                            vx = mat[i, xi] - meanx
-                            vy = mat[i, yi] - meany
-
-                            sumx += vx * vy
-                            sumxx += vx * vx
-                            sumyy += vy * vy
-
-                    divisor = (nobs - 1.0) if calc_cov else c_sqrt(sumxx * sumyy)
-
-                    if divisor != 0:
-                        result[xi, yi] = result[yi, xi] = sumx / divisor
-                    else:
-                        result[xi, yi] = result[yi, xi] = NaN
+                    result[xi, yi] = result[yi, xi] = NaN
 
     return result
 
