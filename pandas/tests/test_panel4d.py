@@ -396,6 +396,26 @@ class CheckIndexing(object):
         self.panel4d['lP'] = self.panel4d['l1'] > 0
         self.assert_(self.panel4d['lP'].values.dtype == np.bool_)
 
+    def test_comparisons(self):
+        p1 = tm.makePanel4D()
+        p2 = tm.makePanel4D()
+
+        def test_comp(func):
+            result = func(p1, p2)
+            self.assert_(np.array_equal(result.values,
+                                        func(p1.values, p2.values)))
+
+            result3 = func(self.panel4d, 0)
+            self.assert_(np.array_equal(result3.values,
+                                        func(self.panel4d.values, 0)))
+
+        test_comp(operator.eq)
+        test_comp(operator.ne)
+        test_comp(operator.lt)
+        test_comp(operator.gt)
+        test_comp(operator.ge)
+        test_comp(operator.le)
+
     def test_setitem_ndarray(self):
         raise nose.SkipTest
     #    from pandas import DateRange, datetools
