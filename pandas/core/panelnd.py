@@ -4,16 +4,17 @@ import pandas
 from pandas.core.panel import Panel
 import pandas.lib as lib
 
-def create_nd_panel_factory(klass_name, axis_orders, axis_slices, slicer, axis_aliases = None, stat_axis = 2):
+def create_nd_panel_factory(klass_name, axis_orders, axis_slices, slicer,
+                            axis_aliases = None, stat_axis = 2):
     """ manufacture a n-d class:
 
         parameters
         ----------
         klass_name  : the klass name
         axis_orders : the names of the axes in order (highest to lowest)
-        axis_slices : a dictionary that defines how the axes map to the sliced axis
+        axis_slices : a dict that defines how the axes map to the sliced axis
         slicer      : the class representing a slice of this panel
-        axis_aliases: a dictionary defining aliases for various axes 
+        axis_aliases: a dictionary defining aliases for various axes
                         default = { major : major_axis, minor : minor_axis }
         stat_axis   : the default statistic axis
                         default = 2
@@ -28,7 +29,7 @@ def create_nd_panel_factory(klass_name, axis_orders, axis_slices, slicer, axis_a
     """
 
     # build the klass
-    klass = type(klass_name, (slicer,),{}) 
+    klass = type(klass_name, (slicer,),{})
 
     # add the class variables
     klass._AXIS_ORDERS   = axis_orders
@@ -49,7 +50,8 @@ def create_nd_panel_factory(klass_name, axis_orders, axis_slices, slicer, axis_a
     #### define the methods ####
     def __init__(self, *args, **kwargs):
         if not (kwargs.get('data') or len(args)):
-            raise Exception("must supply at least a data argument to [%s]" % klass_name)
+            raise Exception("must supply at least a data argument to [%s]"
+                            % klass_name)
         if 'copy' not in kwargs:
             kwargs['copy'] = False
         if 'dtype' not in kwargs:
@@ -89,14 +91,15 @@ def create_nd_panel_factory(klass_name, axis_orders, axis_slices, slicer, axis_a
         d['copy'] = False
         this = self.reindex(**d)
         other = other.reindex(**d)
-    
+
         result_values = func(this.values, other.values)
 
         return self._constructor(result_values, **d)
     klass._combine_with_constructor = _combine_with_constructor
 
     # set as NonImplemented operations which we don't support
-    for f in ['to_frame','to_excel','to_sparse','groupby','join','_get_join_index']:
+    for f in ['to_frame', 'to_excel', 'to_sparse', 'groupby', 'join',
+              '_get_join_index']:
         def func(self, *args, **kwargs):
             raise NotImplementedError
         setattr(klass,f,func)
@@ -112,26 +115,29 @@ if __name__ == '__main__':
 
     # create a 4D
     Panel4DNew = create_nd_panel_factory(
-        klass_name   = 'Panel4DNew', 
-        axis_orders  = ['labels1','items1','major_axis','minor_axis'], 
-        axis_slices  = { 'items1' : 'items', 'major_axis' : 'major_axis', 'minor_axis' : 'minor_axis' },
+        klass_name   = 'Panel4DNew',
+        axis_orders  = ['labels1','items1','major_axis','minor_axis'],
+        axis_slices  = { 'items1' : 'items', 'major_axis' : 'major_axis',
+                         'minor_axis' : 'minor_axis' },
         slicer       = Panel,
         axis_aliases = { 'major' : 'major_axis', 'minor' : 'minor_axis' },
         stat_axis    = 2)
-    
+
     p4dn = Panel4DNew(dict(L1 = testing.makePanel(), L2 = testing.makePanel()))
     print "creating a 4-D Panel"
     print p4dn, "\n"
 
     # create a 5D
     Panel5DNew = create_nd_panel_factory(
-        klass_name   = 'Panel5DNew', 
-        axis_orders  = [ 'cool1', 'labels1','items1','major_axis','minor_axis'], 
-        axis_slices  = { 'labels1' : 'labels1', 'items1' : 'items', 'major_axis' : 'major_axis', 'minor_axis' : 'minor_axis' },
+        klass_name   = 'Panel5DNew',
+        axis_orders  = [ 'cool1', 'labels1','items1','major_axis','minor_axis'],
+        axis_slices  = { 'labels1' : 'labels1', 'items1' : 'items',
+                         'major_axis' : 'major_axis',
+                         'minor_axis' : 'minor_axis' },
         slicer       = Panel4DNew,
         axis_aliases = { 'major' : 'major_axis', 'minor' : 'minor_axis' },
         stat_axis    = 2)
-    
+
     p5dn = Panel5DNew(dict(C1 = p4dn))
 
     print "creating a 5-D Panel"
