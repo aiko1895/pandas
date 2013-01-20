@@ -276,7 +276,12 @@ class TestDataFrameFormatting(unittest.TestCase):
     </tr>
   </tbody>
 </table>"""
-        self.assertEqual(xp, rs)
+        if xp != rs:
+            print 'Expected'
+            print xp
+            print 'Got'
+            print rs
+            raise AssertionError
 
     def test_to_html_multiindex_sparsify(self):
         index = pd.MultiIndex.from_arrays([[0, 0, 1, 1], [0, 1, 0, 1]],
