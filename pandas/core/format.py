@@ -509,7 +509,7 @@ class HTMLFormatter(TableFormatter):
         else:
             start_tag = '<%s>' % kind
 
-        esc = {'<' : r'&lt;', '>' : r'&gt;'}
+        esc = {'<' : '&lt;', '>' : '&gt;'}
         rs = com.pprint_thing(s, escape_chars=esc)
         self.write(
             '%s%s</%s>' % (start_tag, rs, kind), indent)
